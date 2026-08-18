@@ -835,31 +835,23 @@ async function preguntarAlBackend(texto) {
    - AsistenteLocal, que corre en el navegador con los JSON publicados
    Se prefiere el backend cuando está; si no, el chat sigue funcionando igual. */
 async function iniciarChat() {
-  const aviso = document.getElementById("asistente-offline");
   const form = document.getElementById("chat-form");
 
+  // El cambio de motor es transparente para quien usa la página: no se avisa
+  // de nada, solo cambia la nota discreta de la cabecera. La diferencia entre
+  // ambos está explicada en la pestaña "El modelo".
   try {
     const r = await fetch("/api/estado");
     if (!r.ok) throw new Error("no listo");
     const s = await r.json();
 
     chat.backend = true;
-    aviso.hidden = true;
     document.getElementById("chat-estado").textContent =
       `modelo en vivo · ${s.carreras} carreras · error medio ${s.mae} posiciones`;
   } catch (e) {
     // Sin backend: motor del navegador. La web publicada llega aquí.
     chat.backend = false;
     AsistenteLocal.iniciar(estado);
-
-    aviso.hidden = false;
-    aviso.innerHTML =
-      "<b>Funcionando en el navegador.</b> " +
-      "El asistente no usa ningún modelo de lenguaje, así que sus respuestas son " +
-      "deterministas y se calculan aquí mismo con los datos publicados. " +
-      "Las predicciones salen de las curvas precalculadas, igual que en la pestaña " +
-      "Predicción. Con <code>python server/app.py</code> en local, en cambio, consulta " +
-      "el modelo en vivo.";
     document.getElementById("chat-estado").textContent =
       `${estado.indice.total_carreras} carreras · error medio ` +
       `${num(estado.metricas.mae_modelo, 2)} posiciones`;
