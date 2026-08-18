@@ -696,6 +696,9 @@ async function init() {
   // --- Campeonato y modelo ---
   renderClasificacion();
   renderModelo();
+
+  // El chat va el ultimo: AsistenteLocal necesita los datos ya cargados.
+  await iniciarChat();
 }
 
 document.addEventListener("DOMContentLoaded", init);
@@ -705,7 +708,7 @@ document.addEventListener("DOMContentLoaded", init);
    levantado, la pestaña lo explica en vez de fallar en silencio: la web
    estática publicada sigue siendo válida sin él. */
 
-const chat = { disponible: false, ocupado: false, historial: [] };
+const chat = { disponible: false, backend: false, ocupado: false };
 
 function escapar(s) {
   return String(s).replace(/[&<>"']/g, (c) =>
@@ -798,24 +801,16 @@ async function preguntar(texto) {
     '<div class="escribiendo"><span></span><span></span><span></span></div>';
 
   try {
-    const r = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pregunta: texto }),
-    });
-    const datos = await r.json();
-    esperando.remove();
+    const datos = chat.backend
+      ? await preguntarAlBackend(texto)
+      : await AsistenteLocal.responder(texto);
 
-    if (!r.ok) {
-      pintarMensaje("bot", datos.error || "El servidor ha devuelto un error.");
-    } else {
-      pintarMensaje("bot", datos.texto, datos.bloques);
-      pintarSugerencias(datos.sugerencias);
-    }
+    esperando.remove();
+    pintarMensaje("bot", datos.texto, datos.bloques);
+    pintarSugerencias(datos.sugerencias);
   } catch (e) {
     esperando.remove();
-    pintarMensaje("bot",
-      "No he podido contactar con el asistente. ¿Sigue levantado `python server/app.py`?");
+    pintarMensaje("bot", `No he podido responder a eso (${e.message}).`);
   } finally {
     chat.ocupado = false;
     document.getElementById("chat-enviar").disabled = false;
@@ -823,6 +818,22 @@ async function preguntar(texto) {
   }
 }
 
+/** Pregunta al servidor Flask, que usa el modelo en vivo. */
+async function preguntarAlBackend(texto) {
+  const r = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pregunta: texto }),
+  });
+  const datos = await r.json();
+  if (!r.ok) throw new Error(datos.error || "el servidor devolvió un error");
+  return datos;
+}
+
+/* El asistente tiene dos motores con el mismo formato de respuesta:
+   - el backend Flask, que llama al modelo en vivo (solo en local)
+   - AsistenteLocal, que corre en el navegador con los JSON publicados
+   Se prefiere el backend cuando está; si no, el chat sigue funcionando igual. */
 async function iniciarChat() {
   const aviso = document.getElementById("asistente-offline");
   const form = document.getElementById("chat-form");
@@ -832,35 +843,40 @@ async function iniciarChat() {
     if (!r.ok) throw new Error("no listo");
     const s = await r.json();
 
-    chat.disponible = true;
+    chat.backend = true;
     aviso.hidden = true;
     document.getElementById("chat-estado").textContent =
-      `${s.carreras} carreras · error medio ${s.mae} posiciones`;
-
-    pintarMensaje("bot",
-      "Hola. Puedo predecir carreras, comparar pilotos, consultar el histórico y " +
-      "explicarte cómo funciona el modelo.\n\n" +
-      "Escribe con normalidad: entiendo erratas y nombres coloquiales de circuitos " +
-      "(Monza, Spa, Montmeló…).");
-    pintarSugerencias([
-      "¿Quién gana la próxima carrera?",
-      "Compara a Verstappen y Norris",
-      "¿Qué tan fiable es el modelo?",
-      "¿Qué pasó en Hungría 2026?",
-    ]);
+      `modelo en vivo · ${s.carreras} carreras · error medio ${s.mae} posiciones`;
   } catch (e) {
-    // Modo estático: el backend no está. Se explica, no se rompe.
-    chat.disponible = false;
+    // Sin backend: motor del navegador. La web publicada llega aquí.
+    chat.backend = false;
+    AsistenteLocal.iniciar(estado);
+
     aviso.hidden = false;
     aviso.innerHTML =
-      "<b>El asistente necesita el servidor local.</b><br>" +
-      "Esta página está funcionando en modo estático, así que el chat no está activo. " +
-      "Para usarlo, ejecuta <code>python server/app.py</code> y abre " +
-      "<code>http://localhost:5000</code>. El resto de pestañas funcionan sin él.";
-    form.querySelector("input").disabled = true;
-    form.querySelector("button").disabled = true;
-    document.getElementById("chat-estado").textContent = "sin conexión";
+      "<b>Funcionando en el navegador.</b> " +
+      "El asistente no usa ningún modelo de lenguaje, así que sus respuestas son " +
+      "deterministas y se calculan aquí mismo con los datos publicados. " +
+      "Las predicciones salen de las curvas precalculadas, igual que en la pestaña " +
+      "Predicción. Con <code>python server/app.py</code> en local, en cambio, consulta " +
+      "el modelo en vivo.";
+    document.getElementById("chat-estado").textContent =
+      `${estado.indice.total_carreras} carreras · error medio ` +
+      `${num(estado.metricas.mae_modelo, 2)} posiciones`;
   }
+
+  chat.disponible = true;
+  pintarMensaje("bot",
+    "Hola. Puedo predecir carreras, comparar pilotos, consultar el histórico y " +
+    "explicarte cómo funciona el modelo.\n\n" +
+    "Escribe con normalidad: entiendo erratas y nombres coloquiales de circuitos " +
+    "(Monza, Spa, Montmeló…).");
+  pintarSugerencias([
+    "¿Quién gana la próxima carrera?",
+    "Compara a Verstappen y Norris",
+    "¿Qué tan fiable es el modelo?",
+    "¿Qué pasó en Hungría 2026?",
+  ]);
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -876,4 +892,3 @@ async function iniciarChat() {
   });
 }
 
-document.addEventListener("DOMContentLoaded", iniciarChat);

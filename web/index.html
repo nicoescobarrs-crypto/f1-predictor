@@ -332,13 +332,27 @@
 
       <h3>El asistente</h3>
       <p>El chat <b>no usa ningún modelo de lenguaje</b>. Es un clasificador de intención por
-         palabras clave más un extractor de entidades con coincidencia difusa
-         (<code>rapidfuzz</code>), que es lo que permite escribir «verstapen» o «montmeló» y que
-         funcione. Cada intención tiene su manejador, que consulta el dataset con pandas y llama
-         al modelo de verdad.</p>
+         palabras clave más un extractor de entidades con coincidencia difusa, que es lo que
+         permite escribir «verstapen» o «montmeló» y que funcione. Cada intención tiene su
+         manejador, que consulta los datos y devuelve cifras reales.</p>
       <p>La ventaja de no usar un LLM: no hay clave de API que proteger, no cuesta dinero y es
          imposible que se invente un dato, porque todas las cifras salen de una consulta real.
          La desventaja: solo entiende preguntas parecidas a las previstas.</p>
+      <p>Precisamente por ser determinista, existe <b>dos veces</b>, y la página usa la que
+         tenga disponible:</p>
+      <ul>
+        <li><b>En el navegador</b> (<code>js/asistente.js</code>): funciona en la web publicada,
+            sin servidor. Las predicciones salen de las curvas de sensibilidad precalculadas,
+            igual que la pestaña Predicción.</li>
+        <li><b>En el servidor</b> (<code>server/asistente.py</code>): si ejecutas
+            <code>python server/app.py</code>, la página lo detecta y lo prefiere, porque
+            consulta el modelo en vivo con pandas y scikit-learn en lugar de usar la
+            aproximación.</li>
+      </ul>
+      <p>La coincidencia difusa de la versión del navegador es un port del subconjunto de
+         <code>rapidfuzz</code> que hacía falta: similitud por subsecuencia común más larga,
+         en <code>js/difuso.js</code>. Con ella, «verstapen» puntúa 94.7 contra «verstappen»
+         y solo 72.7 entre «alonso» y «albon», que es lo que evita confundir a dos pilotos.</p>
     </div>
   </section>
 
@@ -350,6 +364,9 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<!-- El orden importa: app.js usa lo que definen los dos anteriores -->
+<script src="js/difuso.js"></script>
+<script src="js/asistente.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
