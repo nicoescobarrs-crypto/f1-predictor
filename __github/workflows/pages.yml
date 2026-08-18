@@ -1,0 +1,41 @@
+# ALTERNATIVA a Firebase: publicar en GitHub Pages.
+#
+# Este workflow NO se ejecuta solo. Esta puesto en manual a proposito, para que
+# no falle en cada push si no tienes Pages activado. Si algun dia lo quieres:
+#   1. Settings -> Pages -> Source: GitHub Actions
+#   2. Pestaña Actions -> "Publicar en GitHub Pages" -> Run workflow
+#   3. Quedara en https://TU-USUARIO.github.io/f1-predictor/
+#
+# Puedes tener las dos publicaciones a la vez sin problema.
+name: Publicar en GitHub Pages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.despliegue.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+
+      # Sube solo la web. El pipeline de Python no se ejecuta aqui:
+      # los JSON ya vienen generados y commiteados desde tu equipo.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+      - id: despliegue
+        uses: actions/deploy-pages@v4
