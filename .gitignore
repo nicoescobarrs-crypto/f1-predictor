@@ -1,0 +1,23 @@
+# OJO: las barras iniciales importan. Sin ellas, "data/" tambien capturaria
+# "web/data/", que es justo lo que la web publicada necesita para funcionar.
+
+# Cache de FastF1: cientos de MB, se regenera sola
+/cache/
+
+# Dataset intermedio (parquet), se regenera con el pipeline
+/data/
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+venv/
+.venv/
+
+# Firebase
+.firebase/
+*-debug.log
+
+# Sistema
+.DS_Store
+Thumbs.db

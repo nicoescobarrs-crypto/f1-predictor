@@ -1,0 +1,11 @@
+# --- Pipeline de datos y modelos ---
+fastf1>=3.8
+pandas>=2.0
+numpy>=1.26
+scikit-learn>=1.4       # monotonic_cst en HistGradientBoosting requiere >=1.4
+matplotlib>=3.8
+rapidfuzz>=3.0
+pyarrow>=15.0
+
+# --- Servidor del asistente (opcional: la web estática funciona sin él) ---
+Flask>=3.0
