@@ -8,8 +8,16 @@
     ],
     "headers": [
       {
+        "source": "**/*.@(html|js|css)",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
         "source": "**/data/**/*.json",
-        "headers": [{ "key": "Cache-Control", "value": "public, max-age=300" }]
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=300" }
+        ]
       }
     ]
   }
