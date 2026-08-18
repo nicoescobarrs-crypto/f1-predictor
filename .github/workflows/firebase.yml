@@ -1,0 +1,55 @@
+# Publica la carpeta web/ en Firebase Hosting cada vez que haces push a main.
+#
+# No necesitas Node ni la CLI de Firebase en tu equipo: todo ocurre en los
+# servidores de GitHub. Solo hay que configurar dos cosas, una sola vez:
+#
+#   1. PROJECT_ID aqui abajo, con el ID de tu proyecto de Firebase
+#   2. Un secreto FIREBASE_SERVICE_ACCOUNT en el repositorio
+#      (Settings -> Secrets and variables -> Actions -> New repository secret)
+#
+# Los pasos completos estan en DEPLOY.md.
+
+name: Publicar en Firebase
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # permite lanzarlo a mano desde la pestaña Actions
+
+env:
+  # ↓↓↓ CAMBIA ESTO por el ID de tu proyecto de Firebase ↓↓↓
+  # Lo ves en la consola de Firebase, en Configuracion del proyecto ->
+  # ID del proyecto. No es el nombre visible, es el identificador.
+  PROJECT_ID: f1-predictor-4c2a1
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Comprobaciones previas: mejor fallar aqui con un mensaje claro que
+      # publicar una web rota.
+      - name: Comprobar que esta todo lo necesario
+        run: |
+          if [ ! -f firebase.json ]; then
+            echo "::error::Falta firebase.json en la raiz del repositorio."
+            exit 1
+          fi
+          if [ ! -f web/index.html ]; then
+            echo "::error::Falta web/index.html. Comprueba que subiste la carpeta web/."
+            exit 1
+          fi
+          if [ ! -f web/data/index.json ]; then
+            echo "::error::Falta web/data/index.json. Sin los JSON la web sale vacia."
+            exit 1
+          fi
+          echo "Datos presentes: $(find web/data -name '*.json' | wc -l) ficheros JSON"
+          echo "Desplegando en el proyecto: $PROJECT_ID"
+
+      - name: Desplegar
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ env.PROJECT_ID }}
+          channelId: live
