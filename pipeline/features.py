@@ -147,6 +147,10 @@ def _estado_piloto(data: pd.DataFrame, driver_id: str) -> dict:
 
     # Precalculamos los agregados, que son constantes para todo escenario:
     # lo unico que cambia al mover la parrilla son las columnas de grid.
+    def media_reciente(col: str, n: int) -> float:
+        """Media de las ultimas n carreras, o NaN si esa columna no existe."""
+        return h[col].tail(n).mean() if col in h.columns else np.nan
+
     estado = {
         "h": h, "equipo": equipo, "th": th,
         "agg": {
@@ -161,6 +165,10 @@ def _estado_piloto(data: pd.DataFrame, driver_id: str) -> dict:
             "Team_FormPos":  th["Position"].tail(TEAM_WINDOW).mean(),
             "Team_DNFRate":  th["DNF"].tail(TEAM_WINDOW * 2).mean(),
             "Team_FormPts":  th["Points"].tail(TEAM_WINDOW).mean(),
+            # Ritmo de clasificacion reciente. Sirve de estimacion mientras no
+            # se haya disputado la qualy del GP que estamos prediciendo.
+            "Q_GapPole":     media_reciente("Q_GapPole", FORM_WINDOW),
+            "Q_GapNorm":     media_reciente("Q_GapNorm", FORM_WINDOW),
         },
         "track": {},  # historial por circuito, se rellena bajo demanda
     }
@@ -181,11 +189,29 @@ def _hist_circuito(estado: dict, event_name: str) -> tuple[float, float]:
     return estado["track"][event_name]
 
 
+def condiciones_tipicas(data: pd.DataFrame, event_name: str) -> dict:
+    """Clima de referencia para un Gran Premio.
+
+    Se usa cuando no hay pronostico: la media historica de ese circuito, que ya
+    captura lo esencial (Singapur es caluroso y humedo, Spa fresco y lluvioso).
+    Si el circuito es nuevo, se cae a la media del dataset.
+    """
+    campos = ["TempPista", "Viento", "Lluvia"]
+    faltantes = [c for c in campos if c not in data.columns]
+    if faltantes:
+        return {c: np.nan for c in campos}
+
+    hist = data[data["EventName"] == event_name]
+    fuente = hist if len(hist) else data
+    return {c: float(fuente[c].mean()) for c in campos}
+
+
 def construir_filas(data: pd.DataFrame,
                     entradas: list[dict],
                     event_name: str,
                     location: str = "",
-                    rnd: int | None = None) -> pd.DataFrame:
+                    rnd: int | None = None,
+                    condiciones: dict | None = None) -> pd.DataFrame:
     """Construye la matriz de features para una carrera hipotetica.
 
     entradas: lista de dicts con driver_id y grid.
@@ -197,6 +223,10 @@ def construir_filas(data: pd.DataFrame,
     if rnd is None:
         rnd = int(data["Round"].median())
     urbano = es_calle(location, event_name)
+
+    # Clima: el pronostico si lo hay, y si no la media historica del circuito.
+    clima = dict(condiciones_tipicas(data, event_name))
+    clima.update({k: v for k, v in (condiciones or {}).items() if v is not None})
 
     # Mapa equipo -> lista de (driver_id, grid) para el duelo con el companero
     por_equipo: dict[str, list[tuple[str, float]]] = {}
@@ -230,7 +260,14 @@ def construir_filas(data: pd.DataFrame,
             "Team_TrackPos": team_track,
             "TeammateGridDelta": mate_delta,
             **st["agg"],
+            **clima,
         })
+
+    # Si se conoce el tiempo real de la qualy, pisa la estimacion por forma
+    for fila, e in zip(filas, entradas):
+        for campo, clave in (("Q_GapPole", "q_gap"), ("Q_GapNorm", "q_gap_norm")):
+            if e.get(clave) is not None:
+                fila[campo] = float(e[clave])
 
     return pd.DataFrame(filas)
 

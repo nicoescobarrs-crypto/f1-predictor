@@ -18,20 +18,27 @@ import features
 from config import WEB_DATA, YEARS
 from data import calendario_futuro, construir_dataset
 from export import (exportar_clasificacion, exportar_evento, exportar_indice,
-                    exportar_metricas, exportar_pilotos, exportar_resultados,
-                    slug)
+                    exportar_mercado, exportar_metricas, exportar_pilotos,
+                    exportar_resultados, slug)
 from features import preparar
 from models import entrenar
 
 
-def _eventos_a_predecir(data: pd.DataFrame, maximo: int) -> list[dict]:
-    """Proximas carreras del calendario. Si la temporada acabo, re-simula la ultima."""
+def _eventos_a_predecir(data: pd.DataFrame, maximo: int | None) -> list[dict]:
+    """Proximas carreras del calendario. Si la temporada acabo, re-simula la ultima.
+
+    maximo=None devuelve TODAS las que quedan, y esa distincion importa: para la
+    web exportamos solo unas pocas (cada JSON pesa 53 KB), pero la simulacion
+    del campeonato necesita el calendario completo. Simulando solo las 4 que se
+    exportaban se ignoraban 175 puntos en juego y salia un absurdo 100 % de
+    probabilidad de titulo.
+    """
     temporada = int(data["Year"].max())
     fut = calendario_futuro(temporada)
 
     eventos = []
     if len(fut):
-        for r in fut.head(maximo).itertuples():
+        for r in (fut if maximo is None else fut.head(maximo)).itertuples():
             nombre = r.EventName
             eventos.append({
                 "evento": nombre,
@@ -64,11 +71,15 @@ def _eventos_a_predecir(data: pd.DataFrame, maximo: int) -> list[dict]:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Pipeline de prediccion de F1")
     ap.add_argument("--refrescar", action="store_true",
-                    help="vuelve a descargar los resultados desde FastF1")
+                    help="descarga incrementalmente las carreras que falten")
+    ap.add_argument("--reconstruir", action="store_true",
+                    help="rehace el dataset desde cero (raro: solo si se corrompe)")
     ap.add_argument("--anios", type=int, nargs="+", default=YEARS,
                     help="temporadas a incluir")
     ap.add_argument("--eventos", type=int, default=5,
                     help="cuantas carreras futuras predecir (default 5)")
+    ap.add_argument("--simulaciones", type=int, default=4000,
+                    help="temporadas a simular para el campeonato (default 4000)")
     args = ap.parse_args()
 
     t0 = time.time()
@@ -76,7 +87,8 @@ def main() -> int:
     print("=" * 64)
     print("  1/4  DATOS")
     print("=" * 64)
-    raw = construir_dataset(args.anios, refrescar=args.refrescar)
+    raw = construir_dataset(args.anios, refrescar=args.refrescar,
+                            reconstruir=args.reconstruir)
 
     print("\n" + "=" * 64)
     print("  2/4  FEATURES")
@@ -105,6 +117,9 @@ def main() -> int:
         print(f"\n   Prediciendo: {ev['evento']} ({ev['fecha']})")
         exportar_evento(data, modelos, ev)
 
+    # La simulacion usa el calendario ENTERO que queda, no solo lo exportado.
+    todas = _eventos_a_predecir(data, None)
+    exportar_mercado(data, modelos, todas, n_sim=args.simulaciones)
     exportar_indice(data, modelos["metricas"], eventos)
 
     print("\n" + "=" * 64)

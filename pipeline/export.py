@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from config import FEATURE_LABELS, TARGET_DEFS, WEB_DATA
+from clima import pronostico
 from features import construir_filas, parrilla_actual
 from models import predecir
 
@@ -219,7 +220,18 @@ def exportar_evento(data: pd.DataFrame, modelos: dict, evento: dict) -> dict:
     lugar  = evento.get("lugar", "")
     ronda  = evento.get("ronda")
 
-    filas = construir_filas(data, ref_grid, nombre, lugar, ronda)
+    # Pronostico del tiempo para el dia de la carrera. Si no hay (mas de 16 dias
+    # vista, o circuito desconocido), construir_filas usa la media historica del
+    # circuito, que ya distingue Singapur de Spa.
+    tiempo = None
+    if evento.get("fecha") and evento.get("futuro", True):
+        tiempo = pronostico(nombre, evento["fecha"], lugar, data)
+        if tiempo:
+            print(f"      clima previsto: {tiempo['TempAire']:.0f}C aire, "
+                  f"~{tiempo['TempPista']:.0f}C pista, "
+                  f"{tiempo['prob_lluvia_pct']}% lluvia")
+
+    filas = construir_filas(data, ref_grid, nombre, lugar, ronda, tiempo)
     pred  = predecir(modelos, filas)
 
     n = len(ref_grid)
@@ -232,7 +244,7 @@ def exportar_evento(data: pd.DataFrame, modelos: dict, evento: dict) -> dict:
                  "grid": g if e["driver_id"] == did else e["grid"]}
                 for e in ref_grid
             ]
-            f = construir_filas(data, escenario, nombre, lugar, ronda)
+            f = construir_filas(data, escenario, nombre, lugar, ronda, tiempo)
             p = predecir(modelos, f)
             r = p[p["DriverId"] == did].iloc[0]
             punto = {"grid": g,
@@ -252,6 +264,7 @@ def exportar_evento(data: pd.DataFrame, modelos: dict, evento: dict) -> dict:
         "ronda": ronda,
         "temporada": evento.get("anio"),
         "urbano": evento.get("urbano", 0),
+        "clima": tiempo,
         "grid_referencia": ref_grid,
         "prediccion": [_fila_prediccion(r) for _, r in pred.iterrows()],
         "sensibilidad": sensibilidad,
@@ -286,4 +299,81 @@ def exportar_indice(data: pd.DataFrame, metricas: dict,
              "ronda": e.get("ronda"), "futuro": e.get("futuro", True)}
             for e in eventos
         ],
+    })
+
+
+# --------------------------- MODELO CONTRA MERCADO --------------------------
+def exportar_mercado(data: pd.DataFrame, modelos: dict,
+                     eventos: list[dict], n_sim: int = 4000) -> None:
+    """Compara la probabilidad de titulo del modelo con la del mercado.
+
+    Dos formas independientes de estimar lo mismo:
+      - el modelo simula el resto de la temporada N veces
+      - Polymarket agrega el dinero de miles de personas
+
+    Donde discrepan es lo interesante: o el mercado sabe algo que el modelo no
+    (un cambio de reglamento, una lesion), o el modelo ve algo que el mercado
+    todavia no ha incorporado.
+    """
+    from mercado import cuotas
+    from simulacion import simular
+
+    print("\n   Simulando el resto de la temporada...")
+    sim = simular(data, modelos, eventos, n=n_sim)
+    print(f"      {sim['simulaciones']} temporadas simuladas, "
+          f"{sim['carreras_restantes']} carreras restantes")
+
+    print("   Consultando Polymarket...")
+    mk = cuotas()
+    print("      " + ("cuotas obtenidas" if mk else "no disponible (se publica solo el modelo)"))
+
+    def emparejar(lista_modelo, opciones, clave_nombre):
+        """Cruza por apellido, que es como Polymarket nombra a los pilotos."""
+        if not opciones:
+            return {}
+        idx = {}
+        for o in opciones:
+            idx[o["nombre"].strip().lower()] = o["prob"]
+        salida = {}
+        for m in lista_modelo:
+            nombre = str(m[clave_nombre]).strip().lower()
+            if nombre in idx:
+                salida[m[clave_nombre]] = idx[nombre]
+                continue
+            apellido = nombre.split()[-1]
+            for k, v in idx.items():
+                if k.split()[-1] == apellido:
+                    salida[m[clave_nombre]] = v
+                    break
+        return salida
+
+    mk_pil = mk["mercados"].get("pilotos", {}).get("opciones") if mk else None
+    mk_eq  = mk["mercados"].get("equipos", {}).get("opciones") if mk else None
+
+    prob_pil = emparejar(sim["pilotos"], mk_pil, "nombre")
+    prob_eq  = emparejar(sim["equipos"], mk_eq, "equipo")
+
+    for p in sim["pilotos"]:
+        p["prob_mercado"] = prob_pil.get(p["nombre"])
+        p["diferencia"] = (p["prob_titulo"] - p["prob_mercado"]
+                           if p["prob_mercado"] is not None else None)
+    for e in sim["equipos"]:
+        e["prob_mercado"] = prob_eq.get(e["equipo"])
+        e["diferencia"] = (e["prob_titulo"] - e["prob_mercado"]
+                           if e["prob_mercado"] is not None else None)
+
+    _escribir("mercado.json", {
+        "generado": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "simulacion": {k: sim[k] for k in
+                       ("temporada", "simulaciones", "carreras_restantes",
+                        "carreras_disputadas", "sigma_carrera",
+                        "sigma_persistente")},
+        "mercado": ({"fuente": mk["fuente"],
+                     "pilotos": {k: v for k, v in mk["mercados"].get("pilotos", {}).items()
+                                 if k != "opciones"},
+                     "equipos": {k: v for k, v in mk["mercados"].get("equipos", {}).items()
+                                 if k != "opciones"}}
+                    if mk else None),
+        "pilotos": sim["pilotos"],
+        "equipos": sim["equipos"],
     })

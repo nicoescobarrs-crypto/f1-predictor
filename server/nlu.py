@@ -47,9 +47,12 @@ INTENCIONES = [
     ("prediccion", [
         r"\bpredi", r"\bpronostic", r"\bcomo le ira\b", r"\bque tal (?:le )?ira\b",
         r"\bva a ganar\b", r"\bganara\b", r"\bquedara\b", r"\bterminara\b",
+        # "quien gana" en presente mira al futuro; "quien gano" en pasado lo
+        # captura antes carrera_pasada, y el \b evita que se solapen.
+        r"\bquien gana\b", r"\bquien ganaria\b",
         r"\bprobabilidad", r"\bchances?\b", r"\bopciones de\b",
         r"\bsi sale\b", r"\bsaliendo\b", r"\bdesde la p\d+\b", r"\bproxima carrera\b",
-        r"\bsiguiente (?:gran premio|carrera|gp)\b",
+        r"\bproxima\b", r"\bsiguiente (?:gran premio|carrera|gp)\b",
     ]),
     ("circuito", [
         r"\bcircuito\b", r"\btrazado\b", r"\ben (?:el )?gp\b", r"\bgran premio\b",

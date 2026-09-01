@@ -76,7 +76,21 @@ FEATURES = [
     "Drv_Gain", "Drv_Exp", "Drv_TrackPos",
     "Team_FormPos", "Team_DNFRate", "Team_FormPts", "Team_TrackPos",
     "TeammateGridDelta",
+    # Condiciones de carrera. Al entrenar son las observadas; al predecir, el
+    # pronostico de Open-Meteo. Medido en experimento_variables.py: mejoran el
+    # MAE en los 5 cortes temporales probados, -0.051 de media.
+    "TempPista", "Viento", "Lluvia",
 ]
+
+# Q_GapPole y Q_GapNorm (distancia a la pole en segundos) SI se descargan y se
+# guardan, pero NO entran en el modelo: medidas en los mismos 5 cortes, encima
+# del clima empeoran el MAE en 4 de 5 (+0.015 de media).
+#
+# Tiene sentido: la parrilla ya ES el resultado de la clasificacion, asi que el
+# tiempo es en gran parte redundante, y con ~2100 filas dos dimensiones de mas
+# cuestan mas de lo que aportan. Se conservan en el dataset porque son utiles
+# para mostrar el ritmo real en la web.
+FEATURES_DESCARTADAS = ["Q_GapPole", "Q_GapNorm"]
 
 # Etiquetas en espanol para la web
 FEATURE_LABELS = {
@@ -97,6 +111,11 @@ FEATURE_LABELS = {
     "Team_FormPts":      "Puntos recientes del equipo",
     "Team_TrackPos":     "Historial del equipo en el circuito",
     "TeammateGridDelta": "Diferencia con su companero",
+    "Q_GapPole":         "Distancia a la pole (s)",
+    "Q_GapNorm":         "Distancia a la pole (normalizada)",
+    "TempPista":         "Temperatura de la pista",
+    "Viento":            "Viento",
+    "Lluvia":            "Lluvia en carrera",
 }
 
 # Objetivos de clasificacion (probabilidades que muestra la web)

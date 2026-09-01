@@ -12,6 +12,7 @@ const estado = {
   pilotos: null,
   resultados: null,
   clasificacion: null,
+  mercado: null,
   evento: null,      // JSON del GP seleccionado
   parrilla: [],      // [driverId, ...] en orden de salida
   charts: {},
@@ -117,10 +118,19 @@ async function seleccionarEvento(slug) {
       "útil para comparar con el resultado real en la pestaña Carreras.";
   } else {
     aviso.hidden = false;
-    aviso.textContent =
+    let txt =
       "Todavía no hay clasificación para este Gran Premio. La parrilla de partida " +
       "es una estimación basada en la posición de salida media reciente de cada piloto: " +
       "reordénala cuando se dispute la qualy.";
+    // El pronostico solo existe a menos de 16 dias vista; mas alla, el modelo
+    // usa la media historica del circuito y no hay nada que mostrar.
+    if (ev.clima) {
+      const c = ev.clima;
+      txt += `  ·  Pronóstico: ${num(c.TempAire, 0)} °C de aire, pista estimada en ` +
+             `${num(c.TempPista, 0)} °C, viento ${num(c.Viento, 1)} m/s y ` +
+             `${c.prob_lluvia_pct}% de probabilidad de lluvia. Ya está metido en la predicción.`;
+    }
+    aviso.textContent = txt;
   }
 
   llenarSelectorCurva();
@@ -641,6 +651,10 @@ async function init() {
       cargarJSON("clasificacion.json"),
     ]);
     Object.assign(estado, { indice, metricas, pilotos, resultados, clasificacion });
+
+    // El mercado depende de una API externa: si falla, la pestana lo explica
+    // pero el resto de la pagina sigue funcionando igual.
+    estado.mercado = await cargarJSON("mercado.json").catch(() => null);
   } catch (err) {
     document.querySelector("main").innerHTML =
       `<div class="tarjeta"><h2>No se pudieron cargar los datos</h2>
@@ -696,6 +710,7 @@ async function init() {
   // --- Campeonato y modelo ---
   renderClasificacion();
   renderModelo();
+  renderMercado();
 
   // El chat va el ultimo: AsistenteLocal necesita los datos ya cargados.
   await iniciarChat();
@@ -884,3 +899,90 @@ async function iniciarChat() {
   });
 }
 
+
+/* ============================ MODELO VS MERCADO ======================== */
+
+function barraComparativa(valor, clase) {
+  const v = valor == null ? 0 : valor;
+  return `<div class="barra ${clase}" style="min-width:78px">
+            <i style="width:${Math.max(0, Math.min(100, v * 100))}%"></i>
+            <span>${valor == null ? "—" : pct(valor)}</span>
+          </div>`;
+}
+
+function filaMercado(nombre, puntos, modelo, mercado) {
+  const d = modelo != null && mercado != null ? modelo - mercado : null;
+  const color = d == null ? "var(--texto-tenue)"
+              : d > 0.01 ? "var(--verde)"
+              : d < -0.01 ? "var(--rojo-suave)" : "var(--texto-tenue)";
+  const txt = d == null ? "—" : `${d >= 0 ? "+" : ""}${(d * 100).toFixed(1)}`;
+  return `<tr>
+    <td>${escapar(nombre)}</td>
+    <td class="num texto-tenue">${num(puntos, 0)}</td>
+    <td>${barraComparativa(modelo, "podio")}</td>
+    <td>${barraComparativa(mercado, "puntos")}</td>
+    <td class="num" style="color:${color};font-weight:700">${txt}</td>
+  </tr>`;
+}
+
+function renderMercado() {
+  const m = estado.mercado;
+  if (!m) return;
+
+  const s = m.simulacion;
+  const mk = m.mercado;
+
+  document.getElementById("resumen-mercado").innerHTML = [
+    tarjetaMetrica(s.simulaciones.toLocaleString("es"), "Temporadas simuladas",
+      `${s.carreras_restantes} carreras por disputar`),
+    tarjetaMetrica(`${num(s.sigma_carrera, 2)} + ${num(s.sigma_persistente, 2)}`,
+      "Ruido por carrera + persistente",
+      "medido sobre el conjunto de prueba"),
+    tarjetaMetrica(mk ? mk.fuente : "—", "Fuente del mercado",
+      mk ? `$${(mk.pilotos.volumen / 1e6).toFixed(0)}M de volumen` : "no disponible"),
+    tarjetaMetrica(m.generado.slice(0, 10), "Datos de", "se actualiza con el pipeline"),
+  ].join("");
+
+  document.querySelector("#tabla-mercado-pilotos tbody").innerHTML =
+    m.pilotos.filter((p) => p.prob_titulo > 0.001 || p.prob_mercado > 0.005)
+      .slice(0, 10)
+      .map((p) => filaMercado(p.nombre, p.puntos_ahora, p.prob_titulo, p.prob_mercado))
+      .join("");
+
+  document.querySelector("#tabla-mercado-equipos tbody").innerHTML =
+    m.equipos.filter((e) => e.prob_titulo > 0.001 || e.prob_mercado > 0.005)
+      .slice(0, 10)
+      .map((e) => filaMercado(e.equipo, e.puntos_ahora, e.prob_titulo, e.prob_mercado))
+      .join("");
+
+  // Grafico: solo quien tenga probabilidad apreciable en alguna de las dos fuentes
+  const filas = m.pilotos
+    .filter((p) => (p.prob_titulo ?? 0) > 0.002 || (p.prob_mercado ?? 0) > 0.002)
+    .slice(0, 8);
+
+  destruirChart("mercado");
+  estado.charts.mercado = new Chart(document.getElementById("chart-mercado"), {
+    type: "bar",
+    data: {
+      labels: filas.map((p) => p.nombre.split(" ").pop()),
+      datasets: [
+        { label: "Modelo", data: filas.map((p) => (p.prob_titulo ?? 0) * 100),
+          backgroundColor: "#2ecc71cc", borderColor: "#2ecc71", borderWidth: 1 },
+        { label: "Mercado", data: filas.map((p) => (p.prob_mercado ?? 0) * 100),
+          backgroundColor: "#38bdf8cc", borderColor: "#38bdf8", borderWidth: 1 },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: LEYENDA,
+        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${num(c.parsed.y, 1)}%` } },
+      },
+      scales: {
+        x: { ...EJE },
+        y: { ...EJE, title: { text: "Probabilidad de título (%)", display: true, color: "#9a99a8" } },
+      },
+    },
+  });
+}

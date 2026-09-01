@@ -22,6 +22,7 @@
       <button data-panel="pilotos">Pilotos</button>
       <button data-panel="carreras">Carreras</button>
       <button data-panel="clasificacion">Campeonato</button>
+      <button data-panel="mercado">Modelo vs Mercado</button>
       <button data-panel="modelo">El modelo</button>
     </nav>
   </div>
@@ -191,6 +192,92 @@
           </table>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- =============================== MERCADO =============================== -->
+  <section class="panel" id="panel-mercado">
+    <div class="aviso" id="aviso-mercado">
+      <b>Esto no es un consejo de apuestas.</b> Es un ejercicio de calibración: comparar dos
+      formas independientes de estimar lo mismo. Nuestro modelo simula la temporada miles de
+      veces; el mercado agrega el dinero de miles de personas. Donde discrepan es lo
+      interesante. Y conviene recordar que la probabilidad de victoria es la parte más floja
+      del modelo, así que <b>no está en condiciones de guiar dinero real</b>.
+    </div>
+
+    <div class="rejilla-auto" id="resumen-mercado" style="margin-bottom:1.2rem"></div>
+
+    <div class="rejilla-2" style="grid-template-columns:1fr 1fr">
+      <div class="tarjeta">
+        <h2>Campeonato de pilotos</h2>
+        <p class="texto-tenue" style="margin-bottom:.8rem">
+          Probabilidad de título según cada fuente. La barra verde marca dónde el modelo es
+          más optimista que el mercado, y la roja lo contrario.
+        </p>
+        <div class="tabla-wrap">
+          <table id="tabla-mercado-pilotos">
+            <thead>
+              <tr><th>Piloto</th><th class="num">Pts</th><th>Modelo</th><th>Mercado</th><th class="num">Δ</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tarjeta">
+        <h2>Constructores</h2>
+        <p class="texto-tenue" style="margin-bottom:.8rem">
+          Mismo cálculo sumando los dos coches de cada equipo en cada simulación.
+        </p>
+        <div class="tabla-wrap">
+          <table id="tabla-mercado-equipos">
+            <thead>
+              <tr><th>Equipo</th><th class="num">Pts</th><th>Modelo</th><th>Mercado</th><th class="num">Δ</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="tarjeta" style="margin-top:1.2rem">
+      <h2>Dónde discrepan más</h2>
+      <div class="chart-box"><canvas id="chart-mercado"></canvas></div>
+    </div>
+
+    <div class="tarjeta metodo" style="margin-top:1.2rem">
+      <h2>Cómo se calcula</h2>
+
+      <h3>La probabilidad del modelo</h3>
+      <p>El modelo predice <i>una</i> carrera; el campeonato depende de todas las que quedan.
+         Así que simulamos la temporada entera miles de veces: se parte de los puntos
+         actuales, y en cada carrera se sortea quién abandona y se ordena al resto según la
+         predicción más un componente aleatorio. Se reparten puntos y se pasa a la siguiente.
+         La probabilidad de título es simplemente cuántas veces gana cada uno.</p>
+
+      <h3>Por qué hay dos ruidos y no uno</h3>
+      <p>Al principio la simulación daba un <b>98.9 %</b> al líder donde el mercado daba un
+         75 %. El fallo era sutil: si en cada carrera se sortea un ruido independiente, a lo
+         largo de once carreras los errores se cancelan entre sí y el resultado sale casi
+         determinado.</p>
+      <p>Descomponiendo el error del modelo sobre el conjunto de prueba se ven dos partes
+         muy distintas: un ruido de <b>4.42 posiciones</b> que cambia carrera a carrera y se
+         diluye al promediar, y un sesgo de <b>1.40 posiciones</b> propio de cada piloto que
+         el modelo no capta y que <i>no</i> se diluye. Sorteando ese segundo componente una
+         sola vez por temporada simulada, la cifra baja al 93 %.</p>
+
+      <h3>La probabilidad del mercado</h3>
+      <p>Polymarket es un mercado de predicciones: se compran contratos que pagan 1 dólar si
+         el suceso ocurre, así que el precio se lee directamente como probabilidad. Los
+         precios de un mercado no suman exactamente 1 —esa diferencia es el margen—, así que
+         se reparte proporcionalmente antes de comparar.</p>
+
+      <h3>Qué significa una discrepancia</h3>
+      <p>Que el modelo y el mercado no coincidan no prueba que uno acierte. Puede ser que el
+         mercado sepa algo que el modelo no ve (una lesión, un cambio de reglamento, una
+         mejora anunciada), o que el modelo esté subestimando la incertidumbre que le queda.
+         Viendo la tabla, lo segundo es más probable: el modelo sigue siendo más tajante que
+         el mercado en casi todas las filas.</p>
     </div>
   </section>
 

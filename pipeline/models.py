@@ -139,8 +139,39 @@ def entrenar(data: pd.DataFrame) -> dict:
         "corte": {"year": int(corte["Year"]), "round": int(corte["Round"])},
         "orden": orden,
         "por_temporada": por_temporada,
+        "ruido": descomponer_error(data[~mask_tr], np.asarray(pred_te)),
     }
     return {"reg": reg, "clfs": clfs, "metricas": metricas, "n_max": n_max}
+
+
+def descomponer_error(test: pd.DataFrame, pred: np.ndarray,
+                      min_carreras: int = 5) -> dict:
+    """Separa el error del modelo en dos componentes con vidas muy distintas.
+
+    Hace falta para simular el campeonato. Si se sortea un unico ruido
+    independiente en cada carrera, al sumar once carreras los errores se
+    cancelan entre si y la simulacion sale absurdamente segura del resultado.
+
+      - por carrera : ruido independiente. Se diluye al promediar (1/raiz(n)).
+      - persistente : sesgo propio de cada piloto que el modelo no capta.
+                      Sigue igual de grande tras once carreras que tras una.
+    """
+    t = test.copy()
+    t["resid"] = t["Position"] - pred
+
+    por_piloto = t.groupby("DriverId")["resid"].agg(["mean", "count"])
+    por_piloto = por_piloto[por_piloto["count"] >= min_carreras]
+
+    persistente = float(por_piloto["mean"].std()) if len(por_piloto) > 1 else 0.0
+    dentro = float(t.groupby("DriverId")["resid"]
+                    .transform(lambda s: s - s.mean()).std())
+
+    return {
+        "sigma_carrera": dentro,
+        "sigma_persistente": persistente,
+        "sigma_total": float(t["resid"].std()),
+        "pilotos_evaluados": int(len(por_piloto)),
+    }
 
 
 def _desglose_temporada(test: pd.DataFrame, pred: np.ndarray) -> list[dict]:

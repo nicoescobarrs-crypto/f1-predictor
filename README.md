@@ -22,13 +22,12 @@ Proyecto de la asignatura **Introducción a la Ciencia de Datos**.
 
 | Métrica | Valor |
 |---|---|
-| Error medio (MAE) | **3.11 posiciones** |
-| Baseline "termina donde sale" | 3.45 posiciones |
-| Mejora sobre el baseline | **+9.9 %** |
-| Ganador acertado | 68 % de las carreras de prueba |
-| Podio acertado | 65 % de los pilotos del podio |
-| AUC victoria / podio / puntos | 0.98 / 0.92 / 0.82 |
-| AUC abandono | 0.57 *(ver nota abajo)* |
+| Error medio (MAE) | **3.13 posiciones** |
+| Baseline "termina donde sale" | 3.46 posiciones |
+| Mejora sobre el baseline | **+9.5 %** |
+| Carreras en el dataset | 126 (2021–2026) |
+| AUC victoria / podio / puntos | 0.98 / 0.93 / 0.81 |
+| AUC abandono | 0.55 *(ver nota abajo)* |
 
 Validación **temporal**: se entrena con las primeras carreras y se prueba con las últimas
 (2083 filas de entrenamiento, 401 de prueba). Nunca aleatoria.
@@ -201,14 +200,107 @@ histórico previo vale menos. Es un buen ejemplo de *distribution shift*.
 
 ---
 
+## Actualización automática
+
+`.github/workflows/actualizar.yml` corre los lunes a las 06:00 UTC: descarga la carrera del
+domingo, reentrena, commitea los JSON y republica en Firebase. Sin tocar nada.
+
+Dos detalles que lo hacen funcionar:
+
+**El despliegue va dentro del mismo workflow.** Un push hecho por Actions con el
+`GITHUB_TOKEN` no dispara otros workflows. Si solo commiteara los datos, `firebase.yml` no se
+enteraría y la web se quedaría con los datos viejos aunque el commit fuese correcto.
+
+**La descarga es incremental y resumible.** FastF1 permite 500 llamadas por hora, y una
+descarga completa no cabe en una sola tanda: al añadir la sesión de clasificación se duplicaron
+las llamadas por carrera y la cuota reventó a mitad, dejando el dataset en 87 carreras de 126.
+Ahora `construir_dataset` guarda después de cada temporada, salta lo que ya tiene y, si la
+cuota se agota, avisa y se puede reanudar sin perder nada.
+
+---
+
+## Datos externos
+
+Tres fuentes, todas gratuitas y sin clave de API:
+
+| Fuente | Qué aporta | Dónde |
+|---|---|---|
+| FastF1 | resultados, y además el **clima registrado** durante la carrera | `pipeline/data.py` |
+| Open-Meteo | **pronóstico** para las carreras futuras | `pipeline/clima.py` |
+| Polymarket | probabilidades de campeonato del mercado | `pipeline/mercado.py` |
+
+### El clima entra en el modelo; la clasificación no
+
+Se midieron ambos con `pipeline/experimento_variables.py`, comparando conjuntos de variables
+sobre **cinco cortes temporales distintos** (una sola partición no distingue una mejora real
+del azar):
+
+| Conjunto | Mejora en | MAE medio |
+|---|---|---|
+| Clima | **5 de 5 cortes** | −0.051 |
+| Clasificación | 4 de 5 | −0.016 |
+| Clasificación *encima* del clima | **1 de 5** | **+0.015** (empeora) |
+
+El clima ayuda de forma consistente. La clasificación no, y añadirla encima del clima
+**empeora** el modelo. Tiene sentido: la parrilla ya *es* el resultado de la clasificación, así
+que el tiempo es en buena parte redundante, y con ~2 100 filas dos dimensiones de más cuestan
+más de lo que aportan. Los tiempos se siguen descargando y guardando, pero fuera del modelo.
+
+### Dos conversiones imprescindibles
+
+FastF1 da el viento en **m/s** y Open-Meteo en **km/h**: sin dividir entre 3.6, el modelo vería
+vendavales inexistentes. Y la **temperatura del asfalto no la mide ningún servicio**
+meteorológico, así que se estima con el desfase histórico de cada circuito, sacado de nuestros
+propios datos: en Monza el asfalto va ~15 °C por encima del aire; en Spa, ~5 °C.
+
+---
+
+## Modelo vs Mercado
+
+Dos formas independientes de estimar quién gana el campeonato: el modelo simula la temporada
+4 000 veces, y Polymarket agrega el dinero de miles de personas.
+
+**No es una sección de consejos de apuestas.** Es un ejercicio de calibración, y la
+probabilidad de victoria sigue siendo la parte más floja del modelo.
+
+### El bug que enseña algo sobre simulaciones
+
+La primera versión daba **98.9 %** de título al líder donde el mercado daba 75 %. Descomponiendo
+el error del modelo sobre el conjunto de prueba aparecen dos componentes muy distintos:
+
+| Componente | Tamaño | Comportamiento |
+|---|---|---|
+| Por carrera | 4.42 posiciones | se diluye al promediar (1/√n) |
+| Persistente por piloto | 1.40 posiciones | **no se diluye nunca** |
+
+Sorteando solo el primero, once carreras de ruido independiente se cancelan entre sí y el
+campeonato sale casi determinado. Añadiendo el segundo —sorteado una vez por temporada
+simulada— la cifra baja al 93 %, que sigue siendo más tajante que el mercado pero ya es una
+discrepancia discutible y no un error.
+
+---
+
 ## El asistente
 
 Un chat que responde preguntas en español sobre los datos y el modelo.
 
-**No usa ningún modelo de lenguaje.** Es un clasificador de intención por palabras clave
-(`server/nlu.py`) más un extractor de entidades con coincidencia difusa (`rapidfuzz`), y un
-generador de respuestas (`server/asistente.py`) que consulta el dataset con pandas y llama al
-modelo de verdad.
+**No usa ningún modelo de lenguaje.** Es un clasificador de intención por palabras clave más
+un extractor de entidades con coincidencia difusa, y un generador de respuestas.
+
+Precisamente por ser determinista existe **dos veces**, y la página usa la que tenga:
+
+| | Dónde | Predicciones |
+|---|---|---|
+| `web/js/asistente.js` | en el navegador | curvas de sensibilidad precalculadas |
+| `server/asistente.py` | servidor Flask | modelo en vivo, con pandas y scikit-learn |
+
+Así el chat **funciona en la web publicada**, sin backend ni credenciales. Si además levantas
+`python server/app.py`, la página lo detecta y prefiere el motor de Python, que consulta el
+modelo de verdad en lugar de la aproximación.
+
+`web/js/difuso.js` es un port del subconjunto de `rapidfuzz` que hacía falta: similitud por
+subsecuencia común más larga. Da los mismos números que Python — 94.7 entre «verstapen» y
+«verstappen», 72.7 entre «alonso» y «albon» — que es lo que evita confundir dos pilotos.
 
 Ventajas de no usar un LLM: no hay clave de API que proteger, no cuesta dinero, y es
 imposible que se invente una cifra porque todas salen de una consulta real. Desventaja: solo
@@ -230,8 +322,8 @@ Probar el motor de comprensión por separado, sin levantar el servidor:
 python server/nlu.py "como le ira a alonso en montmelo saliendo 5"
 ```
 
-El chat necesita `python server/app.py`. En la web estática publicada, la pestaña lo explica
-y el resto de la página sigue funcionando con normalidad.
+Mantiene el contexto entre preguntas: tras preguntar por Verstappen en Monza, un «¿y si sale
+desde la pole?» sigue hablando del mismo piloto y del mismo circuito.
 
 ---
 

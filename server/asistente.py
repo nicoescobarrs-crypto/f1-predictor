@@ -51,6 +51,8 @@ class Asistente:
             self.pilotos.rename(columns={"DriverId": "driver_id"}), eventos)
 
         # Parrilla y evento por defecto para las predicciones
+        self.ultimo_evento: dict | None = None
+        self.ultimo_piloto: str | None = None
         self.grid_ref = self._grid_referencia()
         self.evento_defecto = (eventos_futuros[0] if eventos_futuros else
                                {"evento": data.sort_values("Date")["EventName"].iloc[-1],
@@ -80,8 +82,11 @@ class Asistente:
         return self.pilotos[self.pilotos["DriverId"] == did].iloc[0]
 
     def _evento_de(self, c: Consulta) -> dict:
+        # Si la pregunta no nombra circuito, se mantiene el de la anterior: al
+        # preguntar "y si sale desde la pole" el usuario sigue hablando del
+        # mismo GP, no del siguiente del calendario.
         if not c.evento:
-            return self.evento_defecto
+            return self.ultimo_evento or self.evento_defecto
         fila = self.data[self.data["EventName"] == c.evento]
         lugar = fila["Location"].iloc[0] if len(fila) else ""
         for ev in self.eventos_futuros:
@@ -415,6 +420,7 @@ class Asistente:
 
     def _prediccion(self, c: Consulta) -> dict:
         evento = self._evento_de(c)
+        self.ultimo_evento = evento
         cambios = {}
         if c.pilotos and c.grid:
             cambios[c.pilotos[0]] = c.grid
@@ -541,6 +547,14 @@ class Asistente:
     # =================================================================
     def responder(self, pregunta: str) -> dict:
         c = self.interprete.interpretar(pregunta)
+
+        # "y si sale desde la pole" no nombra a nadie, pero al pedir una parrilla
+        # concreta se refiere al piloto del que veniamos hablando. Sin parrilla
+        # ("quien gana esa carrera") si se entiende que pregunta por todos.
+        if c.intencion == "prediccion" and not c.pilotos and c.grid and self.ultimo_piloto:
+            c.pilotos = [self.ultimo_piloto]
+        if c.pilotos:
+            self.ultimo_piloto = c.pilotos[0]
 
         manejadores = {
             "ayuda": self._ayuda,

@@ -8,12 +8,14 @@
     ],
     "headers": [
       {
+        "//": "HTML, JS y CSS sin cache. Sin esto Firebase los guarda una hora y sigues viendo la version vieja aunque el despliegue haya ido bien.",
         "source": "**/*.@(html|js|css)",
         "headers": [
           { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
         ]
       },
       {
+        "//": "Los datos solo cambian tras cada carrera: 5 minutos basta.",
         "source": "**/data/**/*.json",
         "headers": [
           { "key": "Cache-Control", "value": "public, max-age=300" }
