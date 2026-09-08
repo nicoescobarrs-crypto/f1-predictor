@@ -22,8 +22,16 @@ CARPETAS_FUERA = {"cache", "data", "__pycache__", ".git", ".ipynb_checkpoints",
 EXTENSIONES_FUERA = {".pyc", ".pyo"}
 
 
+# El dataset procesado SI se sube pese a estar en data/: pesa 89 KB y evita
+# que la actualizacion automatica tenga que reconstruir 126 carreras desde
+# cero en los runners de GitHub, donde la cuota de FastF1 esta compartida.
+EXCEPCIONES = {("data", "raw_results.parquet")}
+
+
 def se_copia(ruta: Path) -> bool:
     partes = ruta.relative_to(ORIGEN).parts
+    if partes in EXCEPCIONES:
+        return True
     # 'data' solo se excluye en la raiz: web/data SI se sube, es lo que
     # alimenta la pagina publicada.
     if partes[0] in CARPETAS_FUERA:

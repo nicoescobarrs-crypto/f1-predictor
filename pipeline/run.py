@@ -24,6 +24,11 @@ from export import (exportar_clasificacion, exportar_evento, exportar_indice,
 from features import preparar
 from models import entrenar
 
+# Por debajo de esto, entrenar no tiene sentido y sklearn falla con un
+# error indescifrable. Son umbrales holgados: el dataset real tiene 125.
+MINIMO_CARRERAS = 20
+MINIMO_FILAS = 300
+
 
 def _eventos_a_predecir(data: pd.DataFrame, maximo: int | None) -> list[dict]:
     """Proximas carreras del calendario. Si la temporada acabo, re-simula la ultima.
@@ -96,6 +101,21 @@ def main() -> int:
     print("=" * 64)
     features.limpiar_cache()
     df, data = preparar(raw)
+
+    # Con muy pocas filas, scikit-learn revienta al calcular los bins con un
+    # "window shape cannot be larger than input array shape" que no dice nada
+    # de lo que ha pasado en realidad. Mejor parar aqui explicando la causa.
+    n_carreras = data.groupby(["Year", "Round"]).ngroups
+    if n_carreras < MINIMO_CARRERAS or len(data) < MINIMO_FILAS:
+        print(f"\nERROR: solo hay {n_carreras} carreras y {len(data)} filas.")
+        print(f"Hacen falta al menos {MINIMO_CARRERAS} carreras para entrenar.")
+        print("\nCausa habitual: la descarga se quedo a medias porque se agoto")
+        print("la cuota de FastF1 (500 llamadas/hora). En los runners de GitHub")
+        print("pasa con facilidad porque comparten IP con otros proyectos.")
+        print("\nSolucion: el dataset (data/raw_results.parquet) esta versionado")
+        print("en el repositorio justo para evitar esto. Comprueba que existe.")
+        return 1
+
     print(f"Dataset entrenable: {data.shape[0]} filas x {len(data.columns)} columnas")
     print(f"Pilotos distintos : {data['DriverId'].nunique()}")
     print(f"Equipos distintos : {data['TeamName'].nunique()}")
