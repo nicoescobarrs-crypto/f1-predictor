@@ -105,6 +105,7 @@ jobs:
           fi
 
       - name: Commitear los datos nuevos
+        id: commit
         if: steps.cambios.outputs.hay == 'si'
         run: |
           git config user.name  "github-actions[bot]"
@@ -113,9 +114,24 @@ jobs:
           # siguiente ejecucion, y mantenerlo al dia evita volver a descargar.
           git add web/data data/raw_results.parquet
           git commit -m "Actualizacion automatica de datos ($(date -u +%Y-%m-%d))"
-          git push
+
+          # La rama remota puede haber avanzado mientras corria el pipeline
+          # (por ejemplo, si se subieron archivos desde la web de GitHub a la
+          # vez). Sin esto, el push se rechaza por no ser fast-forward.
+          for intento in 1 2 3; do
+            if git push; then
+              echo "Push correcto en el intento $intento"
+              exit 0
+            fi
+            echo "Push rechazado; reintegrando cambios remotos e intentando de nuevo..."
+            git pull --rebase --autostash origin main || true
+            sleep 3
+          done
+          echo "::error::No se pudo hacer push tras 3 intentos."
+          exit 1
 
       - name: Publicar en Firebase
+        id: deploy
         if: steps.cambios.outputs.hay == 'si'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
@@ -126,9 +142,17 @@ jobs:
       - name: Resumen
         if: always()
         run: |
-          if [ "${{ steps.cambios.outputs.hay }}" = "si" ]; then
+          # Solo se anuncia exito si el commit Y el despliegue salieron bien.
+          # Antes bastaba con que hubiera cambios, asi que el resumen decia
+          # "publicada" aunque el job hubiera fallado.
+          if [ "${{ steps.commit.outcome }}" = "success" ] &&              [ "${{ steps.deploy.outcome }}" = "success" ]; then
             echo "### Datos actualizados y web publicada" >> "$GITHUB_STEP_SUMMARY"
             echo "https://${{ env.PROJECT_ID }}.web.app" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ steps.cambios.outputs.hay }}" = "si" ]; then
+            echo "### Habia datos nuevos pero NO se publicaron" >> "$GITHUB_STEP_SUMMARY"
+            echo "- commit: ${{ steps.commit.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- despliegue: ${{ steps.deploy.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "Revisa el paso en rojo mas arriba." >> "$GITHUB_STEP_SUMMARY"
           elif [ "${{ steps.cambios.outputs.hay }}" = "no" ]; then
             echo "### Sin carreras nuevas: no habia nada que publicar" >> "$GITHUB_STEP_SUMMARY"
           else
