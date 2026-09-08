@@ -1,8 +1,8 @@
 # Actualiza los datos y republica la web, sin que tengas que tocar nada.
 #
-# Se ejecuta solo los lunes por la manana (las carreras son en domingo, y
-# FastF1 tarda unas horas en publicar los resultados). Tambien se puede lanzar
-# a mano desde la pestana Actions.
+# Se ejecuta los lunes por la manana (las carreras son en domingo y FastF1
+# tarda unas horas en publicar los resultados). Tambien se puede lanzar a mano
+# desde la pestana Actions.
 #
 # Hace el ciclo entero: descarga -> reentrena -> commitea los JSON -> despliega.
 # El despliegue va aqui dentro a proposito: un push hecho por Actions con el
@@ -16,7 +16,6 @@ on:
     - cron: "0 6 * * 1"     # lunes 06:00 UTC = 01:00 en Colombia
   workflow_dispatch:        # y a mano cuando quieras
 
-# Si una ejecucion se solapa con otra, la nueva espera: evita dos commits a la vez.
 concurrency:
   group: actualizar-datos
   cancel-in-progress: false
@@ -43,18 +42,47 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      # La cache de FastF1 son cientos de MB de descargas. Sin esto, cada
-      # ejecucion volveria a bajar las 124 carreras desde cero.
-      - name: Restaurar la cache de FastF1
+      # Se cachean DOS cosas, y las dos hacen falta:
+      #   cache/  descargas crudas de FastF1 (cientos de MB)
+      #   data/   el parquet ya procesado
+      # El parquet esta en .gitignore, asi que sin cachearlo el pipeline creeria
+      # que no tiene ninguna carrera y volveria a bajar las 126 desde cero,
+      # agotando la cuota de 500 llamadas/hora de FastF1.
+      - name: Restaurar caches
         uses: actions/cache@v4
         with:
-          path: cache
-          key: fastf1-${{ github.run_id }}
+          path: |
+            cache
+            data
+          key: f1-datos-${{ github.run_id }}
           restore-keys: |
-            fastf1-
+            f1-datos-
+
+      # Cuantas carreras hay publicadas AHORA MISMO, para poder comparar
+      # despues y detectar si la descarga se quedo a medias.
+      - name: Anotar el estado actual
+        id: antes
+        run: |
+          N=$(python -c "import json;print(json.load(open('web/data/index.json'))['total_carreras'])" 2>/dev/null || echo 0)
+          echo "carreras=$N" >> "$GITHUB_OUTPUT"
+          echo "Carreras publicadas ahora: $N"
 
       - name: Descargar carreras nuevas y reentrenar
         run: python pipeline/run.py --refrescar --eventos 4
+
+      # RED DE SEGURIDAD. Si la cuota de FastF1 se agota a mitad, el pipeline
+      # guarda lo descargado y sigue adelante, asi que llegaria hasta aqui con
+      # un dataset incompleto y sobrescribiria la web con datos peores.
+      # Antes que publicar algo degradado, se para y avisa.
+      - name: Comprobar que el dataset no ha encogido
+        run: |
+          ANTES=${{ steps.antes.outputs.carreras }}
+          AHORA=$(python -c "import json;print(json.load(open('web/data/index.json'))['total_carreras'])")
+          echo "Antes: $ANTES carreras | Ahora: $AHORA"
+          if [ "$AHORA" -lt "$ANTES" ]; then
+            echo "::error::El dataset ha pasado de $ANTES a $AHORA carreras. Lo mas probable es que se agotara la cuota de FastF1 (500 llamadas/hora) a mitad de la descarga. NO se publica para no degradar la web. Vuelve a lanzar este workflow dentro de una hora: la descarga es incremental y continuara donde lo dejo."
+            exit 1
+          fi
 
       # Solo commitear si algo cambio de verdad. Sin esta comprobacion se
       # crearia un commit vacio cada lunes aunque no se hubiera corrido nada.
@@ -87,10 +115,14 @@ jobs:
           channelId: live
 
       - name: Resumen
+        if: always()
         run: |
           if [ "${{ steps.cambios.outputs.hay }}" = "si" ]; then
             echo "### Datos actualizados y web publicada" >> "$GITHUB_STEP_SUMMARY"
             echo "https://${{ env.PROJECT_ID }}.web.app" >> "$GITHUB_STEP_SUMMARY"
-          else
+          elif [ "${{ steps.cambios.outputs.hay }}" = "no" ]; then
             echo "### Sin carreras nuevas: no habia nada que publicar" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### La ejecucion se detuvo antes de publicar" >> "$GITHUB_STEP_SUMMARY"
+            echo "Revisa el paso que fallo mas arriba." >> "$GITHUB_STEP_SUMMARY"
           fi
