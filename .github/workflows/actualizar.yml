@@ -42,21 +42,28 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      # Se cachean DOS cosas, y las dos hacen falta:
-      #   cache/  descargas crudas de FastF1 (cientos de MB)
-      #   data/   el parquet ya procesado
-      # El parquet esta en .gitignore, asi que sin cachearlo el pipeline creeria
-      # que no tiene ninguna carrera y volveria a bajar las 126 desde cero,
-      # agotando la cuota de 500 llamadas/hora de FastF1.
-      - name: Restaurar caches
+      # Solo se cachea cache/ (descargas crudas de FastF1). El dataset
+      # procesado NO va aqui: ahora esta versionado en el repositorio, y
+      # restaurar una cache vieja encima sobrescribiria el parquet recien
+      # descargado con uno anterior.
+      - name: Restaurar cache de FastF1
         uses: actions/cache@v4
         with:
-          path: |
-            cache
-            data
-          key: f1-datos-${{ github.run_id }}
+          path: cache
+          key: fastf1-${{ github.run_id }}
           restore-keys: |
-            f1-datos-
+            fastf1-
+
+      # El dataset viene con el repositorio (89 KB). Si falta, la descarga
+      # tendria que reconstruir 126 carreras y agotaria la cuota de FastF1:
+      # los runners de GitHub comparten IP y esa cuota suele estar consumida.
+      - name: Comprobar que el dataset viene en el repositorio
+        run: |
+          if [ ! -f data/raw_results.parquet ]; then
+            echo "::error::Falta data/raw_results.parquet. Sin el, el pipeline intentaria descargar las 126 carreras desde cero y agotaria la cuota de FastF1. Subelo al repositorio."
+            exit 1
+          fi
+          ls -lh data/raw_results.parquet
 
       # Cuantas carreras hay publicadas AHORA MISMO, para poder comparar
       # despues y detectar si la descarga se quedo a medias.
@@ -89,12 +96,12 @@ jobs:
       - name: Comprobar si hay datos nuevos
         id: cambios
         run: |
-          if [ -z "$(git status --porcelain web/data)" ]; then
+          if [ -z "$(git status --porcelain web/data data/raw_results.parquet)" ]; then
             echo "hay=no" >> "$GITHUB_OUTPUT"
             echo "Sin cambios: no se ha disputado ninguna carrera nueva."
           else
             echo "hay=si" >> "$GITHUB_OUTPUT"
-            git status --short web/data
+            git status --short web/data data/raw_results.parquet
           fi
 
       - name: Commitear los datos nuevos
@@ -102,7 +109,9 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add web/data
+          # Se commitea tambien el parquet: es la fuente de la que parte la
+          # siguiente ejecucion, y mantenerlo al dia evita volver a descargar.
+          git add web/data data/raw_results.parquet
           git commit -m "Actualizacion automatica de datos ($(date -u +%Y-%m-%d))"
           git push
 
