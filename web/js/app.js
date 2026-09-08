@@ -13,6 +13,7 @@ const estado = {
   resultados: null,
   clasificacion: null,
   mercado: null,
+  backtest: null,
   evento: null,      // JSON del GP seleccionado
   parrilla: [],      // [driverId, ...] en orden de salida
   charts: {},
@@ -133,6 +134,13 @@ async function seleccionarEvento(slug) {
     aviso.textContent = txt;
   }
 
+  const pista = document.getElementById("pista-parrilla");
+  if (pista) {
+    pista.textContent = ES_TACTIL
+      ? "usa las flechas para reordenar"
+      : "arrastra para reordenar";
+  }
+
   llenarSelectorCurva();
   renderParrilla();
   recomputar();
@@ -153,12 +161,16 @@ function estimacion(driverId, grid) {
   return curva[Math.min(Math.max(grid, 1), curva.length) - 1];
 }
 
+/** true si el dispositivo es tactil: ahi el arrastre HTML5 no funciona. */
+const ES_TACTIL = window.matchMedia("(pointer: coarse)").matches ||
+                  navigator.maxTouchPoints > 0;
+
 function renderParrilla() {
   const ol = document.getElementById("parrilla");
   ol.innerHTML = estado.parrilla
     .map((did, i) => {
       const p = infoPiloto(did);
-      return `<li draggable="true" data-id="${did}">
+      return `<li ${ES_TACTIL ? "" : 'draggable="true"'} data-id="${did}">
         <span class="puesto">${i + 1}</span>
         <span class="equipo-chip" style="background:${colorEquipo(p.equipo)}"></span>
         <span class="nombre"><b>${p.abrev}</b> ${p.nombre}<small>${p.equipo}</small></span>
@@ -199,6 +211,7 @@ function recomputar() {
     })
     .join("");
 
+  renderTitular(filas);
   dibujarSensibilidad();
 }
 
@@ -475,17 +488,46 @@ function renderCarrera(slug) {
     ),
   ].join("");
 
+  const bt = renderVeredicto(slug);
+  // Mapa driver_id -> posicion predicha, solo si esta carrera fue de prueba
+  const pred = new Map((bt?.filas ?? []).map((f) => [f.driver_id, f.pos_pred]));
+
+  // La cabecera se construye aqui porque cambia segun haya prediccion o no:
+  // dejar dos columnas vacias en las carreras de entrenamiento seria peor.
+  const cols = ["Pos", "Piloto", "Equipo", "Sale", "Δ", "Pts", "Estado"];
+  if (pred.size) cols.splice(5, 0, "Predicho", "Error");
+
+  document.querySelector("#tabla-carrera thead").innerHTML =
+    `<tr>${cols.map((t) => {
+      const n = ["Pos", "Sale", "Δ", "Pts", "Predicho", "Error"].includes(t);
+      return `<th class="${n ? "num" : ""}">${t}</th>`;
+    }).join("")}</tr>`;
+
   document.querySelector("#tabla-carrera tbody").innerHTML = c.resultados
     .map((r) => {
       const delta = r.grid - r.pos;
       const signo = delta > 0 ? "+" : "";
       const color = delta > 0 ? "var(--verde)" : delta < 0 ? "var(--rojo-suave)" : "var(--texto-tenue)";
+
+      let extra = "";
+      if (pred.size) {
+        const p = pred.get(r.driver_id);
+        if (p == null) {
+          extra = `<td class="num texto-tenue">—</td><td class="num texto-tenue">—</td>`;
+        } else {
+          const e = r.pos - p;
+          extra = `<td class="num">${p}</td>` +
+                  `<td class="num ${claseError(e)}">${e === 0 ? "exacto" : (e > 0 ? "+" : "") + num(e, 0)}</td>`;
+        }
+      }
+
       return `<tr>
         <td class="num">${r.dnf ? '<span class="pos-badge">—</span>' : badgePos(r.pos)}</td>
         <td>${celdaPiloto(r, false)}</td>
         <td class="texto-tenue">${r.equipo}</td>
         <td class="num">${num(r.grid, 0)}</td>
         <td class="num" style="color:${color};font-weight:700">${delta === 0 ? "—" : signo + num(delta, 0)}</td>
+        ${extra}
         <td class="num">${num(r.puntos, 0)}</td>
         <td class="texto-tenue">${r.estado}</td>
       </tr>`;
@@ -654,7 +696,8 @@ async function init() {
 
     // El mercado depende de una API externa: si falla, la pestana lo explica
     // pero el resto de la pagina sigue funcionando igual.
-    estado.mercado = await cargarJSON("mercado.json").catch(() => null);
+    estado.mercado  = await cargarJSON("mercado.json").catch(() => null);
+    estado.backtest = await cargarJSON("backtest.json").catch(() => null);
   } catch (err) {
     document.querySelector("main").innerHTML =
       `<div class="tarjeta"><h2>No se pudieron cargar los datos</h2>
@@ -985,4 +1028,111 @@ function renderMercado() {
       },
     },
   });
+}
+
+/* ================================ TITULAR ==============================
+   Antes de esto, al entrar en Predicción el usuario recibía 176 celdas de
+   números sin que nada le dijera quién gana. Esto responde la pregunta
+   principal en una frase, y traduce las probabilidades a lenguaje normal.
+   ======================================================================= */
+
+/** Traduce una probabilidad de victoria a algo que se entienda sin contexto. */
+function leerProbabilidad(p) {
+  if (p >= 0.5)  return { txt: "favorito claro", clase: "claro" };
+  if (p >= 0.25) return { txt: "favorito", clase: "claro" };
+  if (p >= 0.12) return { txt: "carrera abierta", clase: "ajustado" };
+  return { txt: "muy abierta", clase: "abierto" };
+}
+
+function renderTitular(filas) {
+  const cont = document.getElementById("titular");
+  if (!cont || !filas.length) return;
+
+  const primero = filas[0];
+  const favorito = filas.reduce((a, b) => ((b.victoria ?? 0) > (a.victoria ?? 0) ? b : a));
+  const lectura = leerProbabilidad(favorito.victoria ?? 0);
+  const ev = estado.evento;
+
+  // El regresor y el clasificador son modelos distintos y pueden discrepar.
+  // Decirlo aquí, en una frase, evita que el usuario lo descubra confundido
+  // al comparar la primera fila de la tabla con la columna de victoria.
+  let frase;
+  if (favorito.driver_id === primero.driver_id) {
+    frase = `Es primero tanto en el orden previsto como en probabilidad de victoria.`;
+  } else {
+    frase = `Ojo: el orden previsto lo encabeza <b>${escapar(primero.nombre)}</b>, pero la
+             mayor probabilidad de victoria es de <b>${escapar(favorito.nombre)}</b>. Son dos
+             modelos distintos y aquí no coinciden.`;
+  }
+
+  const clima = ev?.clima
+    ? `  Se esperan ${num(ev.clima.TempAire, 0)} °C y un ${ev.clima.prob_lluvia_pct}% de
+       probabilidad de lluvia, ya incluidos en la predicción.`
+    : "";
+
+  cont.innerHTML = `
+    <div>
+      <div class="quien">
+        <span class="etiqueta-sup">Ganador más probable · ${escapar(ev?.evento ?? "")}</span>
+        <span class="equipo-chip" style="background:${colorEquipo(favorito.equipo)};height:30px"></span>
+        <span class="nombre">${escapar(favorito.nombre)}</span>
+        <span class="escuderia">${escapar(favorito.equipo)}</span>
+        <span class="sello-prob ${lectura.clase}">${lectura.txt}</span>
+      </div>
+      <p class="frase">${frase}${clima}</p>
+    </div>
+    <div class="cifra-grande">
+      <span class="v">${pct(favorito.victoria)}</span>
+      <span class="k">de ganar</span>
+    </div>`;
+}
+
+/* ============================ VEREDICTO ================================
+   Compara lo que el modelo predijo con lo que ocurrió de verdad.
+
+   Solo existe para las carreras del conjunto de PRUEBA: aquellas con las
+   que el modelo nunca se entrenó. Enseñar predicciones de carreras usadas
+   para entrenar sería hacer trampa, porque las tiene medio memorizadas.
+   ======================================================================= */
+
+/** Clase de color según cuánto se desvió la predicción. */
+function claseError(e) {
+  const a = Math.abs(e);
+  return a === 0 ? "err-0" : a <= 2 ? "err-1" : a <= 5 ? "err-2" : "err-3";
+}
+
+function renderVeredicto(slugCarrera) {
+  const cont = document.getElementById("veredicto");
+  if (!cont) return null;
+
+  const bt = estado.backtest?.carreras?.[slugCarrera];
+
+  if (!bt) {
+    // Sin dato: hay que decir POR QUÉ, no dejar el hueco vacío.
+    const corte = estado.backtest?.corte;
+    cont.className = "veredicto sin";
+    cont.innerHTML = `
+      <div class="titulo">El modelo se entrenó con esta carrera
+        <small>Por eso no mostramos aquí una predicción: la conoce de antes y
+        acertaría por memoria, no por mérito. Las predicciones honestas empiezan
+        ${corte ? `en la ronda ${corte.round} de ${corte.year}` : "más adelante"}.</small>
+      </div>`;
+    return null;
+  }
+
+  const ok = bt.acerto_ganador;
+  cont.className = `veredicto ${ok ? "acierto" : "fallo"}`;
+  cont.innerHTML = `
+    <div class="titulo">
+      ${ok ? "El modelo acertó el ganador" : "El modelo falló el ganador"}
+      <small>Carrera del conjunto de prueba: el modelo nunca la vio al entrenar.</small>
+    </div>
+    <div class="dato"><span class="v ${ok ? "err-0" : "err-2"}">${ok ? "Sí" : "No"}</span>
+      <span class="k">Ganador</span></div>
+    <div class="dato"><span class="v">${bt.podio_acertados}/3</span>
+      <span class="k">Podio</span></div>
+    <div class="dato"><span class="v">${num(bt.mae, 1)}</span>
+      <span class="k">Error medio</span></div>`;
+
+  return bt;
 }

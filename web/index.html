@@ -41,12 +41,15 @@
       <button class="accion secundaria" id="btn-invertir">Invertir parrilla</button>
     </div>
 
+    <!-- Titular: responde "¿quién gana?" antes de enseñar ninguna tabla -->
+    <div class="titular" id="titular"></div>
+
     <div id="aviso-evento" class="aviso" hidden></div>
 
     <div class="rejilla-2">
       <div class="tarjeta">
         <h2>Parrilla de salida
-          <span class="texto-tenue" style="font-weight:400">arrastra para reordenar</span>
+          <span class="texto-tenue" style="font-weight:400" id="pista-parrilla"></span>
         </h2>
         <ol class="parrilla" id="parrilla"></ol>
       </div>
@@ -144,21 +147,14 @@
 
     <div class="rejilla-auto" id="resumen-carrera" style="margin-bottom:1.2rem"></div>
 
+    <!-- Veredicto: qué había predicho el modelo para esta carrera -->
+    <div id="veredicto"></div>
+
     <div class="tarjeta">
       <h2 id="titulo-carrera">Resultado</h2>
       <div class="tabla-wrap">
         <table id="tabla-carrera">
-          <thead>
-            <tr>
-              <th class="num">Pos</th>
-              <th>Piloto</th>
-              <th>Equipo</th>
-              <th class="num">Sale</th>
-              <th class="num">Δ</th>
-              <th class="num">Puntos</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
+          <thead></thead>
           <tbody></tbody>
         </table>
       </div>

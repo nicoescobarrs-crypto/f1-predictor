@@ -18,7 +18,8 @@ import features
 from config import WEB_DATA, YEARS
 from data import calendario_futuro, construir_dataset
 from export import (exportar_clasificacion, exportar_evento, exportar_indice,
-                    exportar_mercado, exportar_metricas, exportar_pilotos,
+                    exportar_backtest, exportar_mercado, exportar_metricas,
+                    exportar_pilotos,
                     exportar_resultados, slug)
 from features import preparar
 from models import entrenar
@@ -111,6 +112,7 @@ def main() -> int:
     exportar_pilotos(data)
     exportar_resultados(data)
     exportar_clasificacion(data)
+    exportar_backtest(data, modelos)
 
     eventos = _eventos_a_predecir(data, args.eventos)
     for ev in eventos:

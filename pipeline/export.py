@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
-from config import FEATURE_LABELS, TARGET_DEFS, WEB_DATA
+from config import FEATURE_LABELS, FEATURES, TARGET_DEFS, WEB_DATA
 from clima import pronostico
 from features import construir_filas, parrilla_actual
 from models import predecir
@@ -376,4 +376,82 @@ def exportar_mercado(data: pd.DataFrame, modelos: dict,
                     if mk else None),
         "pilotos": sim["pilotos"],
         "equipos": sim["equipos"],
+    })
+
+
+# ----------------------- PREDICCION CONTRA REALIDAD -------------------------
+def exportar_backtest(data: pd.DataFrame, modelos: dict) -> None:
+    """Lo que el modelo predijo frente a lo que pasó de verdad.
+
+    SOLO se exportan las carreras del conjunto de PRUEBA, es decir, las que el
+    modelo nunca vio al entrenar. Mostrar predicciones de carreras con las que
+    se entrenó seria hacer trampa: el modelo las tiene medio memorizadas y
+    acertaria por motivos que no se repetiran nunca en el futuro.
+
+    Se usa la parrilla real de cada carrera, que es lo que se conoceria el
+    domingo por la manana: la pregunta que responde es "sabiendo desde donde
+    salio cada uno, .acertamos el orden de llegada?".
+    """
+    from models import split_temporal
+
+    mask_tr, corte = split_temporal(data)
+    test = data[~mask_tr].copy()
+
+    n_max = float(data["FieldSize"].max())
+    test["pos_pred_cruda"] = np.clip(
+        test["GridPosition"] - modelos["reg"].predict(test[FEATURES]), 1, n_max)
+    # Dentro de cada carrera, el orden sale de ordenar la estimacion: dos
+    # pilotos no pueden acabar los dos terceros.
+    test["pos_pred"] = (test.groupby(["Year", "Round"])["pos_pred_cruda"]
+                            .rank(method="first").astype(int))
+
+    carreras, aciertos_g, aciertos_p, maes = {}, 0, 0, []
+
+    for (anio, ronda), g in test.groupby(["Year", "Round"]):
+        g = g.sort_values("Position")
+        evento = g["EventName"].iloc[0]
+
+        ganador_real = g.loc[g["Position"].idxmin(), "DriverId"]
+        ganador_pred = g.loc[g["pos_pred"].idxmin(), "DriverId"]
+        acerto = bool(ganador_real == ganador_pred)
+
+        podio_real = set(g.nsmallest(3, "Position")["DriverId"])
+        podio_pred = set(g.nsmallest(3, "pos_pred")["DriverId"])
+        en_podio = len(podio_real & podio_pred)
+
+        mae = float((g["Position"] - g["pos_pred"]).abs().mean())
+
+        aciertos_g += int(acerto)
+        aciertos_p += en_podio
+        maes.append(mae)
+
+        carreras[slug(f"{anio}-{evento}")] = {
+            "evento": evento,
+            "anio": int(anio),
+            "ronda": int(ronda),
+            "fecha": _limpio(g["Date"].iloc[0]),
+            "acerto_ganador": acerto,
+            "podio_acertados": en_podio,
+            "mae": mae,
+            "filas": [
+                {"driver_id": r["DriverId"], "abrev": r["Abbreviation"],
+                 "nombre": r["FullName"], "equipo": r["TeamName"],
+                 "grid": _limpio(r["GridPosition"]),
+                 "pos_real": _limpio(r["Position"]),
+                 "pos_pred": int(r["pos_pred"]),
+                 "dnf": int(r["DNF"])}
+                for _, r in g.iterrows()
+            ],
+        }
+
+    n = len(carreras)
+    _escribir("backtest.json", {
+        "corte": {"year": int(corte["Year"]), "round": int(corte["Round"])},
+        "resumen": {
+            "carreras": n,
+            "mae": float(np.mean(maes)) if maes else None,
+            "ganador_pct": 100 * aciertos_g / n if n else 0,
+            "podio_pct": 100 * aciertos_p / (3 * n) if n else 0,
+        },
+        "carreras": carreras,
     })

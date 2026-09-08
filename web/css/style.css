@@ -585,3 +585,180 @@ footer {
   0%, 60%, 100% { opacity: 0.3; }
   30%           { opacity: 1; }
 }
+
+/* =============================== TITULAR ==============================
+   Responde la pregunta principal ("¿quién gana?") antes de que el usuario
+   se enfrente a 176 celdas de numeros. Es lo primero que se ve al entrar.
+   ====================================================================== */
+.titular {
+  background: linear-gradient(135deg, var(--tarjeta) 0%, var(--fondo-alt) 100%);
+  border: 1px solid var(--borde);
+  border-left: 4px solid var(--rojo);
+  border-radius: var(--radio);
+  display: grid;
+  gap: 1.4rem;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  margin-bottom: 1.2rem;
+  padding: 1.3rem 1.5rem;
+}
+
+@media (max-width: 760px) {
+  .titular { grid-template-columns: 1fr; gap: 1rem; }
+}
+
+.titular .quien {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.6rem;
+}
+
+.titular .etiqueta-sup {
+  color: var(--texto-tenue);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  width: 100%;
+  margin-bottom: 0.35rem;
+}
+
+.titular .nombre {
+  font-size: 1.9rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.titular .escuderia { color: var(--texto-tenue); font-size: 0.95rem; }
+
+.titular .frase {
+  color: #cfced8;
+  font-size: 0.9rem;
+  margin-top: 0.6rem;
+  max-width: 62ch;
+}
+
+.titular .frase b { color: var(--texto); }
+
+.titular .cifra-grande {
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .titular .cifra-grande { text-align: left; }
+}
+
+.titular .cifra-grande .v {
+  display: block;
+  font-size: 2.5rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.titular .cifra-grande .k {
+  color: var(--texto-tenue);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-top: 0.35rem;
+  text-transform: uppercase;
+}
+
+/* Etiqueta que traduce una probabilidad a lenguaje normal */
+.sello-prob {
+  border-radius: 999px;
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.18rem 0.6rem;
+  text-transform: uppercase;
+  vertical-align: 0.15rem;
+}
+.sello-prob.claro   { background: rgba(46, 204, 113, .16); color: var(--verde); }
+.sello-prob.ajustado{ background: rgba(245, 166, 35, .16); color: var(--ambar); }
+.sello-prob.abierto { background: rgba(56, 189, 248, .16); color: var(--azul); }
+
+/* ------------------- OBJETIVOS TACTILES EN MOVIL --------------------
+   El minimo recomendado es 44px. Los botones de mover median 20px, lo
+   que en un movil es practicamente imposible de acertar.
+   -------------------------------------------------------------------- */
+@media (pointer: coarse), (max-width: 760px) {
+  ol.parrilla li { padding: 0.55rem 0.6rem; gap: 0.5rem; }
+
+  ol.parrilla .mover {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 0.95rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  nav.tabs button { padding: 0.85rem 1rem; }
+  button.accion { min-height: 44px; }
+  select, input[type="search"] { min-height: 44px; }
+}
+
+/* ============================== VEREDICTO ==============================
+   Responde "¿pero acertó?" en las carreras que el modelo NUNCA vio al
+   entrenar. Es la pregunta que cualquiera se hace y hasta ahora la web
+   no contestaba.
+   ====================================================================== */
+.veredicto {
+  align-items: center;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.4rem;
+  margin-bottom: 1.2rem;
+  padding: 1rem 1.3rem;
+}
+
+.veredicto.acierto { border-left: 4px solid var(--verde); background: rgba(46,204,113,.07); }
+.veredicto.fallo   { border-left: 4px solid var(--ambar); background: rgba(245,166,35,.07); }
+.veredicto.sin     { border-left: 4px solid var(--borde); }
+
+.veredicto .titulo {
+  font-size: 1.02rem;
+  font-weight: 700;
+  flex: 1 1 16rem;
+}
+.veredicto .titulo small {
+  color: var(--texto-tenue);
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 400;
+  margin-top: 0.25rem;
+}
+
+.veredicto .dato { text-align: center; min-width: 5.5rem; }
+.veredicto .dato .v {
+  display: block;
+  font-size: 1.4rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.veredicto .dato .k {
+  color: var(--texto-tenue);
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  margin-top: 0.3rem;
+  text-transform: uppercase;
+}
+
+/* Error de predicción, coloreado por magnitud */
+.err-0 { color: var(--verde); font-weight: 700; }
+.err-1 { color: var(--texto); }
+.err-2 { color: var(--ambar); }
+.err-3 { color: var(--rojo-suave); font-weight: 700; }
