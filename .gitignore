@@ -4,8 +4,10 @@
 # Cache de FastF1: cientos de MB, se regenera sola
 /cache/
 
-# Dataset intermedio (parquet), se regenera con el pipeline
-/data/
+# El dataset procesado SI se versiona: pesa 89 KB y evita que la
+# actualizacion automatica tenga que reconstruir 126 carreras desde cero.
+/data/*
+!/data/raw_results.parquet
 
 # Python
 __pycache__/
