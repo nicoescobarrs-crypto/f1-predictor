@@ -1,0 +1,165 @@
+# Actualiza los datos y republica la web, sin que tengas que tocar nada.
+#
+# Se ejecuta los lunes por la manana (las carreras son en domingo y FastF1
+# tarda unas horas en publicar los resultados). Tambien se puede lanzar a mano
+# desde la pestana Actions.
+#
+# Hace el ciclo entero: descarga -> reentrena -> commitea los JSON -> despliega.
+# El despliegue va aqui dentro a proposito: un push hecho por Actions con el
+# GITHUB_TOKEN no dispara otros workflows, asi que si solo commiteara, el
+# firebase.yml no se enteraria y la web se quedaria con los datos viejos.
+
+name: Actualizar datos y publicar
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"     # lunes 06:00 UTC = 01:00 en Colombia
+  workflow_dispatch:        # y a mano cuando quieras
+
+concurrency:
+  group: actualizar-datos
+  cancel-in-progress: false
+
+permissions:
+  contents: write           # necesario para commitear los JSON nuevos
+
+env:
+  PROJECT_ID: f1-predictor-4c2a1
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      # Solo se cachea cache/ (descargas crudas de FastF1). El dataset
+      # procesado NO va aqui: ahora esta versionado en el repositorio, y
+      # restaurar una cache vieja encima sobrescribiria el parquet recien
+      # descargado con uno anterior.
+      - name: Restaurar cache de FastF1
+        uses: actions/cache@v4
+        with:
+          path: cache
+          key: fastf1-${{ github.run_id }}
+          restore-keys: |
+            fastf1-
+
+      # El dataset viene con el repositorio (89 KB). Si falta, la descarga
+      # tendria que reconstruir 126 carreras y agotaria la cuota de FastF1:
+      # los runners de GitHub comparten IP y esa cuota suele estar consumida.
+      - name: Comprobar que el dataset viene en el repositorio
+        run: |
+          if [ ! -f data/raw_results.parquet ]; then
+            echo "::error::Falta data/raw_results.parquet. Sin el, el pipeline intentaria descargar las 126 carreras desde cero y agotaria la cuota de FastF1. Subelo al repositorio."
+            exit 1
+          fi
+          ls -lh data/raw_results.parquet
+
+      # Cuantas carreras hay publicadas AHORA MISMO, para poder comparar
+      # despues y detectar si la descarga se quedo a medias.
+      - name: Anotar el estado actual
+        id: antes
+        run: |
+          N=$(python -c "import json;print(json.load(open('web/data/index.json'))['total_carreras'])" 2>/dev/null || echo 0)
+          echo "carreras=$N" >> "$GITHUB_OUTPUT"
+          echo "Carreras publicadas ahora: $N"
+
+      - name: Descargar carreras nuevas y reentrenar
+        run: python pipeline/run.py --refrescar --eventos 4
+
+      # RED DE SEGURIDAD. Si la cuota de FastF1 se agota a mitad, el pipeline
+      # guarda lo descargado y sigue adelante, asi que llegaria hasta aqui con
+      # un dataset incompleto y sobrescribiria la web con datos peores.
+      # Antes que publicar algo degradado, se para y avisa.
+      - name: Comprobar que el dataset no ha encogido
+        run: |
+          ANTES=${{ steps.antes.outputs.carreras }}
+          AHORA=$(python -c "import json;print(json.load(open('web/data/index.json'))['total_carreras'])")
+          echo "Antes: $ANTES carreras | Ahora: $AHORA"
+          if [ "$AHORA" -lt "$ANTES" ]; then
+            echo "::error::El dataset ha pasado de $ANTES a $AHORA carreras. Lo mas probable es que se agotara la cuota de FastF1 (500 llamadas/hora) a mitad de la descarga. NO se publica para no degradar la web. Vuelve a lanzar este workflow dentro de una hora: la descarga es incremental y continuara donde lo dejo."
+            exit 1
+          fi
+
+      # Solo commitear si algo cambio de verdad. Sin esta comprobacion se
+      # crearia un commit vacio cada lunes aunque no se hubiera corrido nada.
+      - name: Comprobar si hay datos nuevos
+        id: cambios
+        run: |
+          if [ -z "$(git status --porcelain web/data data/raw_results.parquet)" ]; then
+            echo "hay=no" >> "$GITHUB_OUTPUT"
+            echo "Sin cambios: no se ha disputado ninguna carrera nueva."
+          else
+            echo "hay=si" >> "$GITHUB_OUTPUT"
+            git status --short web/data data/raw_results.parquet
+          fi
+
+      - name: Commitear los datos nuevos
+        id: commit
+        if: steps.cambios.outputs.hay == 'si'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Se commitea tambien el parquet: es la fuente de la que parte la
+          # siguiente ejecucion, y mantenerlo al dia evita volver a descargar.
+          # -f en el parquet: si el .gitignore del repositorio es una version
+          # antigua que ignora data/ entero, sin esto el add falla y se pierde
+          # la actualizacion. Forzarlo lo hace independiente de ese detalle.
+          git add web/data
+          git add -f data/raw_results.parquet
+          git commit -m "Actualizacion automatica de datos ($(date -u +%Y-%m-%d))"
+
+          # La rama remota puede haber avanzado mientras corria el pipeline
+          # (por ejemplo, si se subieron archivos desde la web de GitHub a la
+          # vez). Sin esto, el push se rechaza por no ser fast-forward.
+          for intento in 1 2 3; do
+            if git push; then
+              echo "Push correcto en el intento $intento"
+              exit 0
+            fi
+            echo "Push rechazado; reintegrando cambios remotos e intentando de nuevo..."
+            git pull --rebase --autostash origin main || true
+            sleep 3
+          done
+          echo "::error::No se pudo hacer push tras 3 intentos."
+          exit 1
+
+      - name: Publicar en Firebase
+        id: deploy
+        if: steps.cambios.outputs.hay == 'si'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ env.PROJECT_ID }}
+          channelId: live
+
+      - name: Resumen
+        if: always()
+        run: |
+          # Solo se anuncia exito si el commit Y el despliegue salieron bien.
+          # Antes bastaba con que hubiera cambios, asi que el resumen decia
+          # "publicada" aunque el job hubiera fallado.
+          if [ "${{ steps.commit.outcome }}" = "success" ] &&              [ "${{ steps.deploy.outcome }}" = "success" ]; then
+            echo "### Datos actualizados y web publicada" >> "$GITHUB_STEP_SUMMARY"
+            echo "https://${{ env.PROJECT_ID }}.web.app" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ steps.cambios.outputs.hay }}" = "si" ]; then
+            echo "### Habia datos nuevos pero NO se publicaron" >> "$GITHUB_STEP_SUMMARY"
+            echo "- commit: ${{ steps.commit.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- despliegue: ${{ steps.deploy.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "Revisa el paso en rojo mas arriba." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ steps.cambios.outputs.hay }}" = "no" ]; then
+            echo "### Sin carreras nuevas: no habia nada que publicar" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### La ejecucion se detuvo antes de publicar" >> "$GITHUB_STEP_SUMMARY"
+            echo "Revisa el paso que fallo mas arriba." >> "$GITHUB_STEP_SUMMARY"
+          fi
