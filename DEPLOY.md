@@ -233,6 +233,94 @@ Pulsa *Commit changes* y el workflow republica solo. No hay que tocar Firebase.
 
 ---
 
+## Registro de usuarios y quiniela (Supabase)
+
+La web sigue siendo estática y se sigue publicando en Firebase igual que antes. Las cuentas y
+la base de datos las pone **Supabase**: PostgreSQL de verdad, con registro/login incluido, gratis
+y sin tarjeta. La página habla con él directamente desde el navegador.
+
+**Sin este paso la web funciona igual**: la pestaña Quiniela entra en modo vista previa (montas
+tu top 10 y lo comparas con el modelo, pero no se guarda) y el botón *Entrar* no aparece.
+
+### S1. Crea el proyecto
+
+En <https://supabase.com> → *New project*. Elige una región cercana (São Paulo o us-east para
+Colombia) y apunta la contraseña de la base de datos en algún sitio: no hace falta para la web,
+pero sí para administrarla.
+
+### S2. Crea las tablas
+
+Menú lateral → **SQL Editor** → *New query*. Abre `sql/schema.sql`, pégalo entero y pulsa
+**Run**. Debe terminar con *Success. No rows returned*.
+
+Se puede volver a ejecutar sin miedo: no borra datos.
+
+### S3. Conecta la web
+
+**Project Settings → API**. Copia dos valores a `web/js/config.js`:
+
+```js
+supabase: {
+  url:  "https://abcdefgh.supabase.co",   // Project URL
+  anon: "eyJhbGciOi...",                   // anon public
+},
+```
+
+> La clave **anon** es pública por diseño: va a estar a la vista en el código de la web y es
+> correcto. Lo que protege los datos son las políticas RLS de `schema.sql`, que corren dentro de
+> Postgres. La clave **service_role**, en cambio, se salta todas esas políticas: **nunca** la
+> pongas en la web ni en GitHub.
+
+### S4. Dile a Supabase dónde vive la web
+
+**Authentication → URL Configuration**:
+
+- **Site URL:** `https://TU-PROJECT-ID.web.app`
+- **Redirect URLs:** añade también `http://localhost:8000` para probar en local
+
+Sin esto, los enlaces de confirmación y de "he olvidado la contraseña" mandan a `localhost:3000`.
+
+**Correo de confirmación.** Viene activado y el servidor de correo gratuito de Supabase solo
+manda unos pocos correos por hora. Para una demo en clase puedes desactivarlo en
+**Authentication → Providers → Email → Confirm email**, y el alta queda hecha al instante.
+
+### S5. Hazte admin
+
+Regístrate en la web con tu cuenta. Luego, en el **SQL Editor**:
+
+```sql
+update public.perfiles set rol = 'admin' where usuario = 'TU_NICK';
+```
+
+Solo se puede hacer desde aquí: un usuario no puede cambiarse el rol a sí mismo desde la web,
+lo impide un trigger.
+
+### S6. Carga el calendario (una vez por temporada)
+
+Entra en la web como admin → pestaña **Quiniela** → abajo aparece el **panel de admin** → pulsa
+**Sincronizar calendario**. Copia todos los Grandes Premios con la hora de la clasificación
+como cierre. Hasta que no lo hagas, nadie puede guardar quinielas.
+
+### Después de cada carrera
+
+Panel de admin → **Puntuar una carrera** → elige el GP → *Puntuar*. Descarga el resultado
+oficial, lo guarda y puntúa todas las quinielas de golpe. El ranking de todos los usuarios
+conectados se actualiza solo, en tiempo real. Si te equivocas, repítelo: es idempotente.
+
+### Cuotas de casas de apuestas (opcional)
+
+Dos fuentes, que se ven juntas en la pestaña *Mercado en vivo*:
+
+- **The Odds API.** Clave gratuita (500 peticiones/mes) en <https://the-odds-api.com>. Va en
+  `CONFIG.oddsApi.clave`. El plan gratis no trae BetPlay; trae casas europeas y americanas.
+- **Carga manual.** Para BetPlay y cualquier casa sin API: panel de admin → *Cuotas manuales*,
+  una línea por piloto con `Nombre; cuota`.
+
+> La clave de The Odds API viaja al navegador de quien abra la web. Con una clave gratuita y
+> limitada es aceptable para un proyecto de clase. Con una de pago no lo hagas.
+
+---
+
 ## El asistente no se publica, y es a propósito
 
 El chat (`server/app.py`) es un servidor Python. Firebase Hosting solo sirve archivos

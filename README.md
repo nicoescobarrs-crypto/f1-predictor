@@ -18,6 +18,30 @@ Proyecto de la asignatura **Introducción a la Ciencia de Datos**.
 - Incluye un **asistente conversacional sin LLM**: entiende preguntas en español y las
   responde consultando los datos y el modelo de verdad.
 
+## Versión 2: cuentas, datos en vivo, quiniela y 3D
+
+| Qué | Cómo | Dónde |
+|---|---|---|
+| **Registro e inicio de sesión** | Supabase Auth sobre PostgreSQL | `web/js/auth.js`, `sql/schema.sql` |
+| **Quiniela** | Predices el top 10 antes de la qualy; se puntúa tras la carrera, y el modelo juega con la misma regla | `web/js/quiniela.js` |
+| **Ranking en tiempo real** | Supabase Realtime: al puntuar un GP, el ranking cambia en todas las pantallas abiertas | `web/js/quiniela.js` |
+| **Clasificación y plantilla en vivo** | API pública jolpica-f1, cada 5 min, sin esperar al pipeline | `web/js/vivo.js` |
+| **Mercado en vivo** | Precios de Polymarket cada 30 s, histórico, podio 3D y casas de apuestas | `web/js/paneles-vivo.js` |
+| **3D** | Circuito con coches en la cabecera y podio giratorio, con Three.js | `web/js/escena3d.js` |
+
+Todo es **opcional y degrada bien**: sin configurar Supabase, la web funciona exactamente como
+antes y la quiniela entra en modo vista previa; sin WebGL, el 3D se sustituye por CSS. La
+configuración está en un solo archivo, `web/js/config.js`. Pasos en [DEPLOY.md](DEPLOY.md).
+
+**La seguridad vive en Postgres, no en el JavaScript.** La web publicada lleva la clave anon a
+la vista de cualquiera, así que las políticas RLS de `sql/schema.sql` son la única frontera real:
+el plazo de la quiniela se comprueba con la hora del servidor, nadie ve la quiniela de otro
+hasta que cierra, y nadie puede ascenderse a admin.
+
+**Lo que no hace:** cronometraje en directo durante la carrera. La API de tiempos de la F1 no es
+pública; "en vivo" aquí significa clasificación actualizada tras cada carrera y precios del
+mercado al momento.
+
 ## Resultados actuales
 
 | Métrica | Valor |
