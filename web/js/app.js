@@ -755,6 +755,11 @@ async function init() {
   renderModelo();
   renderMercado();
 
+  // Aviso para los modulos nuevos (cuentas, quiniela, datos en vivo, 3D):
+  // arrancan aqui y no antes, porque todos leen de 'estado'. Va antes del
+  // chat para que un fallo del asistente no los deje sin arrancar.
+  window.dispatchEvent(new CustomEvent("datos-listos"));
+
   // El chat va el ultimo: AsistenteLocal necesita los datos ya cargados.
   await iniciarChat();
 }

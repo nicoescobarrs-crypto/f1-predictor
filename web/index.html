@@ -3,30 +3,49 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>F1 Predictor — predicción de carreras con machine learning</title>
-  <meta name="description" content="Predicción del resultado de las carreras de Fórmula 1 mediante gradient boosting sobre datos históricos de FastF1.">
+  <title>F1 Predictor — predicción, mercado en vivo y quiniela</title>
+  <meta name="description" content="Predicción del resultado de las carreras de Fórmula 1 con machine learning, probabilidades del mercado en tiempo real y quiniela entre usuarios.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Titillium+Web:ital,wght@0,400;0,600;0,700;1,700&display=swap">
   <link rel="stylesheet" href="css/style.css">
+  <!-- Capa visual nueva. Quitando esta linea vuelve el diseno anterior. -->
+  <link rel="stylesheet" href="css/v2.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🏎️</text></svg>">
 </head>
 <body>
 
 <header>
+  <!-- Circuito 3D de fondo. Si no hay WebGL se queda un degradado en CSS. -->
+  <canvas id="escena-cabecera" aria-hidden="true"></canvas>
+
   <div class="cabecera-inner">
+    <div class="barra-sup">
+      <span class="etiqueta-sup">Machine learning · Mercado en vivo · Quiniela</span>
+      <div id="caja-cuenta"></div>
+    </div>
     <div class="marca">
       <h1>F1 <span>Predictor</span></h1>
+      <p class="lema">¿Quién gana el domingo? El modelo, el mercado y tú.</p>
       <p class="sub" id="sub-cabecera">cargando datos…</p>
     </div>
-    <nav class="tabs" id="tabs">
-      <button data-panel="prediccion" class="activa">Predicción</button>
-      <button data-panel="asistente">Asistente</button>
-      <button data-panel="pilotos">Pilotos</button>
-      <button data-panel="carreras">Carreras</button>
-      <button data-panel="clasificacion">Campeonato</button>
-      <button data-panel="mercado">Modelo vs Mercado</button>
-      <button data-panel="modelo">El modelo</button>
-    </nav>
   </div>
+
+  <!-- Clasificacion en vivo, desplazandose -->
+  <div class="cinta" id="cinta" aria-label="Clasificación del mundial"></div>
 </header>
+
+<!-- Fuera del header para poder quedarse pegada arriba al hacer scroll -->
+<nav class="tabs" id="tabs">
+  <button data-panel="prediccion" class="activa">Predicción</button>
+  <button data-panel="quiniela" class="nuevo">Quiniela</button>
+  <button data-panel="mercado" class="nuevo">Mercado en vivo</button>
+  <button data-panel="clasificacion">Campeonato</button>
+  <button data-panel="pilotos">Pilotos</button>
+  <button data-panel="carreras">Carreras</button>
+  <button data-panel="asistente">Asistente</button>
+  <button data-panel="modelo">El modelo</button>
+</nav>
 
 <main>
 
@@ -89,23 +108,232 @@
     </div>
   </section>
 
-  <!-- ============================== ASISTENTE ============================== -->
-  <section class="panel" id="panel-asistente">
-    <div class="tarjeta chat-tarjeta">
-      <h2>Asistente
-        <span class="texto-tenue" style="font-weight:400" id="chat-estado"></span>
-      </h2>
+  <!-- =============================== QUINIELA ============================== -->
+  <!-- Todo el contenido lo pinta js/quiniela.js -->
+  <section class="panel" id="panel-quiniela">
+    <div id="quiniela-raiz"><p class="cargando">Cargando quiniela…</p></div>
+  </section>
 
-      <div class="chat-mensajes" id="chat-mensajes"></div>
-
-      <div class="chat-sugerencias" id="chat-sugerencias"></div>
-
-      <form class="chat-entrada" id="chat-form" autocomplete="off">
-        <input type="text" id="chat-input" maxlength="300"
-               placeholder="¿Cómo le irá a Verstappen en Monza saliendo P3?">
-        <button class="accion" type="submit" id="chat-enviar">Preguntar</button>
-      </form>
+  <!-- =============================== MERCADO =============================== -->
+  <section class="panel" id="panel-mercado">
+    <div class="cab-panel">
+      <div>
+        <span class="etiqueta-sup">Polymarket · casas de apuestas · nuestro modelo</span>
+        <h2>Mercado en vivo</h2>
+      </div>
+      <span class="sello" id="sello-mercado"><span class="texto-tenue">conectando…</span></span>
     </div>
+
+    <div class="mv-hero">
+      <div class="mv-cifras">
+        <div class="tarjeta cifra lider brillo">
+          <span class="k">Favorito al título según el mercado</span>
+          <span class="quien" id="mv-lider">—</span>
+          <span class="v" id="mv-lider-p">—</span>
+        </div>
+        <div class="tarjeta cifra">
+          <span class="k">Volumen apostado</span>
+          <span class="v" id="mv-volumen">—</span>
+        </div>
+        <div class="tarjeta cifra">
+          <span class="k">Liquidez</span>
+          <span class="v" id="mv-liquidez">—</span>
+        </div>
+        <div class="tarjeta cifra">
+          <span class="k" title="Suma de las probabilidades de todos los pilotos. Por encima de 100 % es margen del mercado; por debajo, dinero sin colocar. Se normaliza a 100 % antes de comparar.">Suma de precios</span>
+          <span class="v" id="mv-margen">—</span>
+        </div>
+      </div>
+
+      <div class="mv-podio" id="mv-podio">
+        <div class="podio-titulo">
+          <span class="etiqueta-sup">Podio del mercado</span>
+          <p class="texto-tenue">arrastra para girarlo</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="tarjeta">
+      <h2>La carrera por el título</h2>
+      <div class="carrera-titulo" id="mv-carrera">
+        <p class="cargando">Conectando con Polymarket…</p>
+      </div>
+      <div class="leyenda-carrera">
+        <span><i></i>Mercado (Polymarket, sin margen)</span>
+        <span><i class="m"></i>Nuestro modelo (temporadas simuladas)</span>
+        <span>▲▼ cambio en 24 h, en puntos porcentuales</span>
+      </div>
+    </div>
+
+    <div class="rejilla-2 r-mercado" style="margin-top:1.2rem">
+      <div class="tarjeta">
+        <h2>Evolución
+          <span class="selector-rango" id="mv-rango">
+            <button data-rango="1d">24 h</button>
+            <button data-rango="1w">7 d</button>
+            <button data-rango="1m" class="activa">30 d</button>
+            <button data-rango="max">Todo</button>
+          </span>
+        </h2>
+        <div class="chart-box alta"><canvas id="chart-historial"></canvas></div>
+      </div>
+      <div class="tarjeta">
+        <h2>Constructores</h2>
+        <div class="carrera-titulo" id="mv-equipos"></div>
+      </div>
+    </div>
+
+    <div class="tarjeta" style="margin-top:1.2rem">
+      <h2>Casas de apuestas</h2>
+      <p class="texto-tenue" style="margin-bottom:1rem">
+        Una cuota decimal se lee como probabilidad con 1 / cuota. Pero la suma de todas pasa de
+        100 %: ese exceso es el margen de la casa, y aquí se descuenta antes de comparar.
+      </p>
+      <div class="casas" id="mv-casas"><p class="cargando">Buscando cuotas…</p></div>
+
+      <h3 style="margin-top:1.4rem">Todas las fuentes, cara a cara</h3>
+      <div id="mv-matriz"></div>
+    </div>
+
+    <div class="aviso" id="aviso-mercado" style="margin-top:1.2rem">
+      <b>Esto no es un consejo de apuestas.</b> Es un ejercicio de calibración: comparar dos
+      formas independientes de estimar lo mismo. Nuestro modelo simula la temporada miles de
+      veces; el mercado agrega el dinero de miles de personas. Donde discrepan es lo
+      interesante. Y conviene recordar que la probabilidad de victoria es la parte más floja
+      del modelo, así que <b>no está en condiciones de guiar dinero real</b>.
+    </div>
+
+    <details class="detalle-mercado">
+      <summary>Modelo vs Mercado: tablas detalladas y metodología</summary>
+
+      <div class="rejilla-auto" id="resumen-mercado" style="margin-bottom:1.2rem"></div>
+
+      <div class="rejilla-2 mitad">
+        <div class="tarjeta">
+          <h2>Campeonato de pilotos</h2>
+          <p class="texto-tenue" style="margin-bottom:.8rem">
+            Probabilidad de título según cada fuente. La barra verde marca dónde el modelo es
+            más optimista que el mercado, y la roja lo contrario.
+          </p>
+          <div class="tabla-wrap">
+            <table id="tabla-mercado-pilotos">
+              <thead>
+                <tr><th>Piloto</th><th class="num">Pts</th><th>Modelo</th><th>Mercado</th><th class="num">Δ</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="tarjeta">
+          <h2>Constructores</h2>
+          <p class="texto-tenue" style="margin-bottom:.8rem">
+            Mismo cálculo sumando los dos coches de cada equipo en cada simulación.
+          </p>
+          <div class="tabla-wrap">
+            <table id="tabla-mercado-equipos">
+              <thead>
+                <tr><th>Equipo</th><th class="num">Pts</th><th>Modelo</th><th>Mercado</th><th class="num">Δ</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="tarjeta" style="margin-top:1.2rem">
+        <h2>Dónde discrepan más</h2>
+        <div class="chart-box"><canvas id="chart-mercado"></canvas></div>
+      </div>
+
+      <div class="tarjeta metodo" style="margin-top:1.2rem">
+        <h2>Cómo se calcula</h2>
+
+        <h3>La probabilidad del modelo</h3>
+        <p>El modelo predice <i>una</i> carrera; el campeonato depende de todas las que quedan.
+           Así que simulamos la temporada entera miles de veces: se parte de los puntos
+           actuales, y en cada carrera se sortea quién abandona y se ordena al resto según la
+           predicción más un componente aleatorio. Se reparten puntos y se pasa a la siguiente.
+           La probabilidad de título es simplemente cuántas veces gana cada uno.</p>
+
+        <h3>Por qué hay dos ruidos y no uno</h3>
+        <p>Al principio la simulación daba un <b>98.9 %</b> al líder donde el mercado daba un
+           75 %. El fallo era sutil: si en cada carrera se sortea un ruido independiente, a lo
+           largo de once carreras los errores se cancelan entre sí y el resultado sale casi
+           determinado.</p>
+        <p>Descomponiendo el error del modelo sobre el conjunto de prueba se ven dos partes
+           muy distintas: un ruido de <b>4.42 posiciones</b> que cambia carrera a carrera y se
+           diluye al promediar, y un sesgo de <b>1.40 posiciones</b> propio de cada piloto que
+           el modelo no capta y que <i>no</i> se diluye. Sorteando ese segundo componente una
+           sola vez por temporada simulada, la cifra baja al 93 %.</p>
+
+        <h3>La probabilidad del mercado</h3>
+        <p>Polymarket es un mercado de predicciones: se compran contratos que pagan 1 dólar si
+           el suceso ocurre, así que el precio se lee directamente como probabilidad. Los
+           precios de un mercado no suman exactamente 1 —esa diferencia es el margen—, así que
+           se reparte proporcionalmente antes de comparar.</p>
+        <p>En esta página los precios se leen <b>en directo</b> desde la API pública de
+           Polymarket cada 30 segundos, y el histórico de cada piloto sale de su libro de
+           órdenes. La probabilidad del modelo, en cambio, se recalcula cuando corre el
+           pipeline, una vez por semana.</p>
+
+        <h3>Qué significa una discrepancia</h3>
+        <p>Que el modelo y el mercado no coincidan no prueba que uno acierte. Puede ser que el
+           mercado sepa algo que el modelo no ve (una lesión, un cambio de reglamento, una
+           mejora anunciada), o que el modelo esté subestimando la incertidumbre que le queda.
+           Viendo la tabla, lo segundo es más probable: el modelo sigue siendo más tajante que
+           el mercado en casi todas las filas.</p>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================= CLASIFICACIÓN =========================== -->
+  <section class="panel" id="panel-clasificacion">
+    <div class="cab-panel">
+      <div>
+        <span class="etiqueta-sup">Datos oficiales · se actualizan solos</span>
+        <h2>Campeonato</h2>
+      </div>
+      <span class="sello" id="sello-campeonato"></span>
+    </div>
+
+    <div class="aviso" id="avance-campeonato" hidden></div>
+
+    <div class="rejilla-2 mitad">
+      <div class="tarjeta">
+        <h2 id="titulo-pilotos-camp">Pilotos</h2>
+        <div class="tabla-wrap">
+          <table id="tabla-camp-pilotos">
+            <thead>
+              <tr><th class="num">#</th><th>Piloto</th><th>Equipo</th>
+                  <th class="num">Pts</th><th class="num">V</th><th class="num">P</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="tarjeta">
+        <h2>Constructores</h2>
+        <div class="tabla-wrap">
+          <table id="tabla-camp-equipos">
+            <thead>
+              <tr><th class="num">#</th><th>Equipo</th>
+                  <th class="num">Pts</th><th class="num">V</th><th class="num">P</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="cab-panel" style="margin-top:2.2rem">
+      <div>
+        <span class="etiqueta-sup">Quién corre con quién</span>
+        <h2>Plantilla</h2>
+      </div>
+      <span class="sello" id="sello-plantilla"></span>
+    </div>
+    <div class="plantilla" id="plantilla-vivo"><p class="cargando">Cargando plantilla…</p></div>
   </section>
 
   <!-- =============================== PILOTOS =============================== -->
@@ -161,119 +389,22 @@
     </div>
   </section>
 
-  <!-- ============================= CLASIFICACIÓN =========================== -->
-  <section class="panel" id="panel-clasificacion">
-    <div class="rejilla-2" style="grid-template-columns:1fr 1fr">
-      <div class="tarjeta">
-        <h2 id="titulo-pilotos-camp">Pilotos</h2>
-        <div class="tabla-wrap">
-          <table id="tabla-camp-pilotos">
-            <thead>
-              <tr><th class="num">#</th><th>Piloto</th><th>Equipo</th>
-                  <th class="num">Pts</th><th class="num">V</th><th class="num">P</th></tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-      <div class="tarjeta">
-        <h2>Constructores</h2>
-        <div class="tabla-wrap">
-          <table id="tabla-camp-equipos">
-            <thead>
-              <tr><th class="num">#</th><th>Equipo</th>
-                  <th class="num">Pts</th><th class="num">V</th><th class="num">P</th></tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </section>
+  <!-- ============================== ASISTENTE ============================== -->
+  <section class="panel" id="panel-asistente">
+    <div class="tarjeta chat-tarjeta">
+      <h2>Asistente
+        <span class="texto-tenue" style="font-weight:400" id="chat-estado"></span>
+      </h2>
 
-  <!-- =============================== MERCADO =============================== -->
-  <section class="panel" id="panel-mercado">
-    <div class="aviso" id="aviso-mercado">
-      <b>Esto no es un consejo de apuestas.</b> Es un ejercicio de calibración: comparar dos
-      formas independientes de estimar lo mismo. Nuestro modelo simula la temporada miles de
-      veces; el mercado agrega el dinero de miles de personas. Donde discrepan es lo
-      interesante. Y conviene recordar que la probabilidad de victoria es la parte más floja
-      del modelo, así que <b>no está en condiciones de guiar dinero real</b>.
-    </div>
+      <div class="chat-mensajes" id="chat-mensajes"></div>
 
-    <div class="rejilla-auto" id="resumen-mercado" style="margin-bottom:1.2rem"></div>
+      <div class="chat-sugerencias" id="chat-sugerencias"></div>
 
-    <div class="rejilla-2" style="grid-template-columns:1fr 1fr">
-      <div class="tarjeta">
-        <h2>Campeonato de pilotos</h2>
-        <p class="texto-tenue" style="margin-bottom:.8rem">
-          Probabilidad de título según cada fuente. La barra verde marca dónde el modelo es
-          más optimista que el mercado, y la roja lo contrario.
-        </p>
-        <div class="tabla-wrap">
-          <table id="tabla-mercado-pilotos">
-            <thead>
-              <tr><th>Piloto</th><th class="num">Pts</th><th>Modelo</th><th>Mercado</th><th class="num">Δ</th></tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="tarjeta">
-        <h2>Constructores</h2>
-        <p class="texto-tenue" style="margin-bottom:.8rem">
-          Mismo cálculo sumando los dos coches de cada equipo en cada simulación.
-        </p>
-        <div class="tabla-wrap">
-          <table id="tabla-mercado-equipos">
-            <thead>
-              <tr><th>Equipo</th><th class="num">Pts</th><th>Modelo</th><th>Mercado</th><th class="num">Δ</th></tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <div class="tarjeta" style="margin-top:1.2rem">
-      <h2>Dónde discrepan más</h2>
-      <div class="chart-box"><canvas id="chart-mercado"></canvas></div>
-    </div>
-
-    <div class="tarjeta metodo" style="margin-top:1.2rem">
-      <h2>Cómo se calcula</h2>
-
-      <h3>La probabilidad del modelo</h3>
-      <p>El modelo predice <i>una</i> carrera; el campeonato depende de todas las que quedan.
-         Así que simulamos la temporada entera miles de veces: se parte de los puntos
-         actuales, y en cada carrera se sortea quién abandona y se ordena al resto según la
-         predicción más un componente aleatorio. Se reparten puntos y se pasa a la siguiente.
-         La probabilidad de título es simplemente cuántas veces gana cada uno.</p>
-
-      <h3>Por qué hay dos ruidos y no uno</h3>
-      <p>Al principio la simulación daba un <b>98.9 %</b> al líder donde el mercado daba un
-         75 %. El fallo era sutil: si en cada carrera se sortea un ruido independiente, a lo
-         largo de once carreras los errores se cancelan entre sí y el resultado sale casi
-         determinado.</p>
-      <p>Descomponiendo el error del modelo sobre el conjunto de prueba se ven dos partes
-         muy distintas: un ruido de <b>4.42 posiciones</b> que cambia carrera a carrera y se
-         diluye al promediar, y un sesgo de <b>1.40 posiciones</b> propio de cada piloto que
-         el modelo no capta y que <i>no</i> se diluye. Sorteando ese segundo componente una
-         sola vez por temporada simulada, la cifra baja al 93 %.</p>
-
-      <h3>La probabilidad del mercado</h3>
-      <p>Polymarket es un mercado de predicciones: se compran contratos que pagan 1 dólar si
-         el suceso ocurre, así que el precio se lee directamente como probabilidad. Los
-         precios de un mercado no suman exactamente 1 —esa diferencia es el margen—, así que
-         se reparte proporcionalmente antes de comparar.</p>
-
-      <h3>Qué significa una discrepancia</h3>
-      <p>Que el modelo y el mercado no coincidan no prueba que uno acierte. Puede ser que el
-         mercado sepa algo que el modelo no ve (una lesión, un cambio de reglamento, una
-         mejora anunciada), o que el modelo esté subestimando la incertidumbre que le queda.
-         Viendo la tabla, lo segundo es más probable: el modelo sigue siendo más tajante que
-         el mercado en casi todas las filas.</p>
+      <form class="chat-entrada" id="chat-form" autocomplete="off">
+        <input type="text" id="chat-input" maxlength="300"
+               placeholder="¿Cómo le irá a Verstappen en Monza saliendo P3?">
+        <button class="accion" type="submit" id="chat-enviar">Preguntar</button>
+      </form>
     </div>
   </section>
 
@@ -281,7 +412,7 @@
   <section class="panel" id="panel-modelo">
     <div class="rejilla-auto" id="metricas-modelo" style="margin-bottom:1.2rem"></div>
 
-    <div class="rejilla-2" style="grid-template-columns:1fr 1fr">
+    <div class="rejilla-2 mitad">
       <div class="tarjeta">
         <h2>Variables más influyentes</h2>
         <p class="texto-tenue" style="margin-bottom:.8rem">
@@ -440,14 +571,26 @@
 </main>
 
 <footer>
-  Datos: FastF1 / Fórmula 1 · Modelo: scikit-learn · Proyecto académico de Introducción a la Ciencia de Datos
+  Datos: FastF1 / Fórmula 1 · jolpica-f1 · Polymarket · Modelo: scikit-learn · 3D: Three.js
+  <br>Proyecto académico de Introducción a la Ciencia de Datos · No afiliado a la Formula One Group
   <br><span id="pie-generado"></span>
 </footer>
 
+<!-- Librerias. Versiones fijadas: una actualizacion silenciosa del CDN no rompe la web. -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<!-- El orden importa: app.js usa lo que definen los dos anteriores -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+
+<!-- El orden importa: cada uno usa lo que definen los anteriores -->
+<script src="js/config.js"></script>
 <script src="js/difuso.js"></script>
 <script src="js/asistente.js"></script>
 <script src="js/app.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/vivo.js"></script>
+<script src="js/escena3d.js"></script>
+<script src="js/paneles-vivo.js"></script>
+<script src="js/quiniela.js"></script>
+<script src="js/arranque.js"></script>
 </body>
 </html>
