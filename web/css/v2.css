@@ -922,3 +922,85 @@ fieldset.campo legend { font-size: 0.78rem; color: var(--texto-tenue); font-weig
   .q-caja { min-width: 3.4rem; }
   .q-caja b { font-size: 1.5rem; }
 }
+
+/* =========================== 3D, SEGUNDA VERSION ======================
+   Va al final para ganar a las reglas de arriba sin tener que buscarlas.
+   ====================================================================== */
+
+/* Cabecera: columna flexible con la cinta pegada abajo. Antes la cinta
+   quedaba a media altura y debajo sobraba una franja negra vacia. */
+header {
+  display: flex;
+  flex-direction: column;
+  min-height: 440px;
+}
+.cabecera-inner { flex: 1; width: 100%; }
+.cinta { margin-top: auto; }
+
+/* El circuito vive a la derecha: el degradado solo oscurece la zona del
+   texto y deja ver la pista entera. */
+header::after {
+  background:
+    linear-gradient(90deg, rgba(7, 7, 12, 0.94) 0%, rgba(7, 7, 12, 0.7) 30%, rgba(7, 7, 12, 0) 58%),
+    linear-gradient(0deg, rgba(7, 7, 12, 0.9) 0%, transparent 22%);
+}
+@media (max-width: 900px) {
+  header::after {
+    background:
+      linear-gradient(180deg, rgba(7, 7, 12, 0.55) 0%, rgba(7, 7, 12, 0.75) 100%);
+  }
+}
+@media (max-width: 760px) {
+  header { min-height: 360px; }
+}
+
+/* Podio: el canvas deja sitio arriba al titulo y abajo a las etiquetas,
+   que ya no se montan encima de los bloques. */
+.mv-podio { min-height: 410px; }
+.podio-canvas {
+  top: 46px;
+  left: 0;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  height: calc(100% - 46px - 92px);
+  touch-action: pan-y;
+}
+.podio-etiquetas {
+  bottom: 0;
+  height: 92px;
+  padding: 0 3.5%;
+  align-items: center;
+  border-top: 1px solid var(--borde);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.1));
+}
+.podio-et { display: flex; flex-direction: column; align-items: center; gap: 0.1rem; }
+.podio-et b {
+  font-size: 1.1rem;
+  line-height: 1.1;
+  border-bottom: 2px solid var(--color, transparent);
+  padding-bottom: 0.1rem;
+}
+.podio-et .pe-pos { font-size: 0.72rem; letter-spacing: 0.08em; }
+.podio-et.p1 b { font-size: 1.25rem; }
+.podio-plano .podio-etiquetas { border-top: none; background: none; }
+
+/* Aviso flotante de datos nuevos (js/arranque.js) */
+.aviso-datos {
+  position: fixed;
+  left: 50%;
+  bottom: 1.2rem;
+  z-index: 90;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  max-width: calc(100% - 2rem);
+  padding: 0.7rem 0.8rem 0.7rem 1.2rem;
+  border-radius: 14px;
+  background: rgba(20, 20, 30, 0.92);
+  border: 1px solid rgba(225, 6, 0, 0.5);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  animation: saltar 0.35s cubic-bezier(.2, .9, .3, 1.2);
+}
