@@ -34,14 +34,25 @@ function contar(el, hasta, { dec = 0, prefijo = "", sufijo = "", ms = 900 } = {}
     return;
   }
   const t0 = performance.now();
-  const paso = (t) => {
-    const k = Math.min(1, (t - t0) / ms);
+  const paso = () => {
+    // Con el reloj propio y acotado a [0, 1]: la marca de tiempo que da
+    // requestAnimationFrame puede ser ANTERIOR a t0, y el primer fotograma
+    // salia con progreso negativo (se llego a ver "-1,6 %").
+    const k = Math.min(1, Math.max(0, (performance.now() - t0) / ms));
     const e = 1 - Math.pow(1 - k, 3);
     const v = desde + (hasta - desde) * e;
     el.textContent = prefijo + v.toLocaleString("es", { maximumFractionDigits: dec, minimumFractionDigits: dec }) + sufijo;
     if (k < 1) requestAnimationFrame(paso);
   };
   requestAnimationFrame(paso);
+  // Red de seguridad: si la pestana se oculta a media animacion, el navegador
+  // pausa requestAnimationFrame y el numero se quedaria a medias. setTimeout
+  // si se ejecuta en segundo plano.
+  setTimeout(() => {
+    if (Number(el.dataset.v) === hasta) {
+      el.textContent = prefijo + hasta.toLocaleString("es", { maximumFractionDigits: dec, minimumFractionDigits: dec }) + sufijo;
+    }
+  }, ms + 80);
 }
 
 function sello(id, fecha, fuente) {
@@ -80,8 +91,10 @@ function pintarCinta(c) {
 
 function pintarCampeonatoVivo(c) {
   const previo = PV.anterior.clasificacion;
-  // Referencia para las flechas: la ultima vez que se vio, o el pipeline.
-  const base = previo ?? {
+  // Las flechas comparan SIEMPRE con la clasificacion del pipeline, que es lo
+  // que dice la cabecera de la columna. Compararlas con el refresco anterior
+  // las borraba a los 5 minutos: entre dos refrescos no se mueve nadie.
+  const base = {
     pilotos: (estado.clasificacion?.pilotos ?? []).map((p) => ({ driverId: p.DriverId, pos: p.pos, puntos: p.puntos })),
     ronda: estado.clasificacion?.carreras_disputadas,
   };
@@ -99,8 +112,10 @@ function pintarCampeonatoVivo(c) {
     tb.innerHTML = c.pilotos.map((p, i) => {
       const b = base.pilotos.find((x) => x.driverId === p.driverId);
       const mov = b ? b.pos - p.pos : 0;
-      const subio = b && p.puntos > b.puntos;
-      return `<tr class="${subio && previo ? "destello" : ""}" style="--i:${i}">
+      // El destello si es contra el refresco anterior: marca lo que acaba de cambiar.
+      const antes = previo?.pilotos.find((x) => x.driverId === p.driverId);
+      const subio = antes && p.puntos > antes.puntos;
+      return `<tr class="${subio ? "destello" : ""}" style="--i:${i}">
         <td class="num">${badgePos(p.pos)}</td>
         <td>${celdaPiloto({ abrev: p.abrev, nombre: p.nombre, equipo: p.equipo }, false)}
             <div class="mini-barra"><i style="width:${(p.puntos / lider) * 100}%;background:${colorEquipo(p.equipo)}"></i></div></td>
