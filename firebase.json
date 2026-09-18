@@ -15,10 +15,10 @@
         ]
       },
       {
-        "//": "Los datos solo cambian tras cada carrera: 5 minutos basta.",
+        "//": "Datos con no-cache: el navegador pregunta si cambiaron (304 si no). Asi la carrera nueva del lunes se ve al instante.",
         "source": "**/data/**/*.json",
         "headers": [
-          { "key": "Cache-Control", "value": "public, max-age=300" }
+          { "key": "Cache-Control", "value": "no-cache" }
         ]
       }
     ]
