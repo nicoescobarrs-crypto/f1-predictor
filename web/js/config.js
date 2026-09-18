@@ -23,9 +23,7 @@ const CONFIG = {
      cambio, no debe aparecer JAMAS aqui: se salta RLS entera.
      ---------------------------------------------------------------- */
   supabase: {
-    url:  "https://lfnjllxwzkfdvootzjrg.supabase.co
-
-   ",
+    url:  "https://lfnjllxwzkfdvootzjrg.supabase.co",
     anon: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmbmpsbHh3emtmZHZvb3R6anJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3NDA3NjcsImV4cCI6MjEwNTMxNjc2N30.Zyn_tRzKEy1x0Wuui9X4q9vBxIWBtmijGJkcZ2_Fwbs",
   },
 
