@@ -668,6 +668,11 @@ function renderModelo() {
 /* ================================= INIT ================================ */
 
 function activarTabs() {
+  // La navegacion no espera a los datos ni a Supabase Auth.
+  document.getElementById("btn-planes").onclick = () => {
+    document.querySelector('#tabs [data-panel="planes"]').click();
+    document.getElementById("panel-planes").scrollIntoView?.({ block: "start" });
+  };
   document.getElementById("tabs").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-panel]");
     if (!btn) return;
