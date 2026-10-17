@@ -26,3 +26,4 @@ Thumbs.db
 
 # Dependencias de pruebas, fuera de la web publicada
 tests/node_modules/
+supabase/.temp/

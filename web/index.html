@@ -22,7 +22,7 @@
   <div class="cabecera-inner">
     <div class="barra-sup">
       <span class="etiqueta-sup">Machine learning · Mercado en vivo · Quiniela</span>
-      <div id="caja-cuenta"></div>
+      <div class="acciones-cuenta"><button class="accion secundaria" id="btn-planes">Mejorar plan</button><div id="caja-cuenta"></div></div>
     </div>
     <div class="marca">
       <h1>F1 <span>Predictor</span></h1>
@@ -45,6 +45,7 @@
   <button data-panel="carreras">Carreras</button>
   <button data-panel="asistente">Asistente</button>
   <button data-panel="modelo">El modelo</button>
+  <button data-panel="planes">Planes</button>
 </nav>
 
 <main>
@@ -105,6 +106,35 @@
           <div class="chart-box"><canvas id="chart-sensibilidad"></canvas></div>
         </div>
       </div>
+    </div>
+    <div class="tarjeta laboratorio">
+      <span class="etiqueta-sup">Tu laboratorio</span><h2>Guarda y compara escenarios</h2>
+      <p class="texto-tenue">Reordena la parrilla de arriba y guarda una variante. Los escenarios son personales y no cambian tu quiniela.</p>
+      <p id="escenario-cupo" role="status"></p>
+      <div class="planes-formulario"><label class="campo">Nombre del escenario<input id="escenario-nombre" maxlength="80" placeholder="Verstappen sale desde P10"></label>
+      <button class="accion" id="escenario-guardar" disabled>Guardar escenario</button></div>
+      <div id="escenario-lista"></div>
+      <div class="planes-formulario"><button class="accion secundaria" id="escenario-comparar" disabled>Comparar seleccionados</button>
+      <button class="accion secundaria" id="escenario-exportar" disabled>Exportar CSV · Experto</button></div>
+      <p id="escenario-estado" role="status"></p><div id="escenario-resultado"></div>
+    </div>
+  </section>
+
+  <!-- =============================== PLANES ================================ -->
+  <section class="panel" id="panel-planes">
+    <div class="tarjeta"><span class="etiqueta-sup">Más formas de explorar</span>
+      <h2>Mejora tu plan</h2><p id="plan-actual" role="status">Básico · acceso gratuito</p>
+      <p class="texto-tenue">Los planes VIP y Experto se activan manualmente durante un mes. Solicita tu plan y acuerda el pago con Nico o Martín. No se realiza ningún cobro desde esta página ni hay renovación automática.</p>
+      <button class="accion secundaria" id="planes-actualizar">Actualizar mi plan</button>
+      <p id="planes-estado" role="status"></p>
+    </div>
+    <div class="planes-rejilla" id="planes-tarjetas"></div>
+    <div class="tarjeta admin" id="planes-admin" hidden>
+      <h2>Administrar planes</h2><p>Solo Nico y Martín pueden asignar planes. Asignar VIP o Experto inicia un mes de acceso desde este momento; Básico elimina la mejora.</p>
+      <h3>Solicitudes pendientes</h3><div id="planes-solicitudes"></div>
+      <div class="planes-formulario"><label class="campo">Nombre de usuario exacto<input id="planes-usuario" maxlength="20" autocomplete="off"></label>
+      <label class="campo">Plan<select id="planes-codigo"><option value="basico">Básico</option><option value="vip">VIP</option><option value="experto">Experto</option></select></label>
+      <button class="accion" id="planes-asignar">Asignar plan</button></div><p id="planes-admin-estado" role="status"></p>
     </div>
   </section>
 
@@ -401,7 +431,7 @@
       <div class="chat-sugerencias" id="chat-sugerencias"></div>
 
       <form class="chat-entrada" id="chat-form" autocomplete="off">
-        <input type="text" id="chat-input" maxlength="300"
+        <input type="text" id="chat-input" maxlength="600"
                placeholder="¿Cómo le irá a Verstappen en Monza saliendo P3?">
         <button class="accion" type="submit" id="chat-enviar">Preguntar</button>
       </form>
@@ -585,8 +615,10 @@
 <script src="js/config.js"></script>
 <script src="js/difuso.js"></script>
 <script src="js/asistente.js"></script>
+<script src="js/asistente-pagina.js"></script>
 <script src="js/app.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/planes.js"></script>
 <script src="js/vivo.js"></script>
 <script src="js/escena3d.js"></script>
 <script src="js/paneles-vivo.js"></script>
