@@ -63,6 +63,7 @@ const AsistenteLocal = {
 
   // ----------------------------------------------------------- entidades
   _intencion(norm) {
+    if (/\b(modelo|mae|auc|baseline)\b/.test(norm)) return "modelo";
     for (const [nombre, patrones] of INTENCIONES) {
       for (const p of patrones) if (p.test(norm)) return nombre;
     }
@@ -512,7 +513,7 @@ const AsistenteLocal = {
           (c.grid ? `saliendo desde P${f.grid}` :
                     `si sale desde P${f.grid} (su parrilla estimada según su forma reciente)`) +
           `:\n\nEl modelo lo sitúa en **P${idx + 1}** (estimación bruta ` +
-          `${(f.pos ?? 0).toFixed(1)}, error típico ±` +
+          `${(f.pos ?? 0).toFixed(1)}, error medio histórico de ` +
           `${this.datos.metricas.mae_modelo.toFixed(1)} posiciones).\n\n` +
           `Sus probabilidades: **${this._pct(f.victoria)} de ganar**, ` +
           `${this._pct(f.podio)} de podio, ${this._pct(f.puntos)} de puntuar y ` +
@@ -593,7 +594,7 @@ const AsistenteLocal = {
         default:               r = this._noEntendido("");
       }
     } catch (e) {
-      r = this._noEntendido(`Algo ha fallado procesando eso (${e.message}).`);
+      r = this._noEntendido(`No pude consultar esos datos de la página. Indica el piloto y el Gran Premio para concretar la consulta.`);
     }
     if (c.pilotos.length) this.ultimoPiloto = c.pilotos[0];
 

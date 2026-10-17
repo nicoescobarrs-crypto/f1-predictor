@@ -864,16 +864,14 @@ async function preguntar(texto) {
     '<div class="escribiendo"><span></span><span></span><span></span></div>';
 
   try {
-    const datos = chat.backend
-      ? await preguntarAlBackend(texto)
-      : await AsistenteLocal.responder(texto);
+    const datos = await AsistentePagina.responder(texto);
 
     esperando.remove();
     pintarMensaje("bot", datos.texto, datos.bloques);
     pintarSugerencias(datos.sugerencias);
   } catch (e) {
     esperando.remove();
-    pintarMensaje("bot", `No he podido responder a eso (${e.message}).`);
+    pintarMensaje("bot", "No pude consultar esos datos. Prueba indicando el piloto, el Gran Premio o el apartado de la página.");
   } finally {
     chat.ocupado = false;
     document.getElementById("chat-enviar").disabled = false;
@@ -900,38 +898,16 @@ async function preguntarAlBackend(texto) {
 async function iniciarChat() {
   const form = document.getElementById("chat-form");
 
-  // El cambio de motor es transparente para quien usa la página: no se avisa
-  // de nada, solo cambia la nota discreta de la cabecera. La diferencia entre
-  // ambos está explicada en la pestaña "El modelo".
-  try {
-    const r = await fetch("/api/estado");
-    if (!r.ok) throw new Error("no listo");
-    const s = await r.json();
-
-    chat.backend = true;
-    document.getElementById("chat-estado").textContent =
-      `modelo en vivo · ${s.carreras} carreras · error medio ${s.mae} posiciones`;
-  } catch (e) {
-    // Sin backend: motor del navegador. La web publicada llega aquí.
-    chat.backend = false;
-    AsistenteLocal.iniciar(estado);
-    document.getElementById("chat-estado").textContent =
-      `${estado.indice.total_carreras} carreras · error medio ` +
-      `${num(estado.metricas.mae_modelo, 2)} posiciones`;
-  }
+  AsistenteLocal.iniciar(estado);
+  chat.backend = false;
+  document.getElementById("chat-estado").textContent =
+    `datos de F1 Predictor · ${estado.indice.total_carreras} carreras`;
 
   chat.disponible = true;
   pintarMensaje("bot",
-    "Hola. Puedo predecir carreras, comparar pilotos, consultar el histórico y " +
-    "explicarte cómo funciona el modelo.\n\n" +
-    "Escribe con normalidad: entiendo erratas y nombres coloquiales de circuitos " +
-    "(Monza, Spa, Montmeló…).");
-  pintarSugerencias([
-    "¿Quién gana la próxima carrera?",
-    "Compara a Verstappen y Norris",
-    "¿Qué tan fiable es el modelo?",
-    "¿Qué pasó en Hungría 2026?",
-  ]);
+    "Hola. Soy el asistente de F1 Predictor. Puedo explicar las predicciones y sus límites, comparar pilotos, consultar el histórico y ayudarte con tu quiniela, cuenta y plan.\n\n" +
+    "Mis respuestas se basan en los datos y funciones de esta página. Dime qué quieres explorar y te mostraré la conclusión, los datos y cómo interpretarlos.");
+  pintarSugerencias(["¿Quién gana la próxima carrera?", "¿Cómo se puntúa la quiniela?", "¿Qué incluye cada plan?", "¿Qué tan fiable es el modelo?"]);
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();

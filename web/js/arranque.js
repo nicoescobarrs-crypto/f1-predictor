@@ -19,6 +19,7 @@ window.addEventListener("datos-listos", async () => {
 
   await intentar("3D", () => Escena3D.cabecera(document.getElementById("escena-cabecera")));
   await intentar("cuentas", () => Cuenta.iniciar());
+  await intentar("planes", () => Planes.iniciar());
   await intentar("vivo", () => PanelesVivo.iniciar());
   await intentar("quiniela", () => Quiniela.iniciar());
 
