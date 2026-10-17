@@ -128,5 +128,22 @@ simulación no equivale a una investigación con personas reales.
 | Usuario de teclado o lector de pantalla | Reordenar sin arrastrar | Cada control identifica al piloto y permite seguir trabajando |
 
 Las pruebas que escriban datos deben usar cuentas identificadas para pruebas
-y, preferentemente, una base separada. Hasta conectar Supabase, solo están
-verificados los permisos en la base temporal, no en producción.
+y, preferentemente, una base separada. Hasta comprobar el proyecto real, solo
+están verificados los permisos en la base temporal, no en producción.
+
+## Estado de esta revisión
+
+Las 39 comprobaciones locales y el workflow de pruebas del PR número 1
+terminaron correctamente en GitHub Actions.
+
+La revisión inicial del navegador pudo abrir Carreras, Predicción y Quiniela,
+y colocar un piloto. Un agente independiente intentó abrir su propia pestaña
+para una prueba de visitante, pero la herramienta no devolvió la página y
+la llamada terminó interrumpida tras aproximadamente cinco minutos. No se
+considera completada esa prueba ni se atribuye el bloqueo al sitio.
+
+El plugin de Supabase figura instalado. Sin embargo, esta sesión no expone
+sus herramientas de consulta, por lo que no se han inspeccionado ni modificado
+las reglas activas. Una petición de lectura a la API pública recibió un 502
+con un error de conexión; esa respuesta tampoco permite determinar el estado
+general de Supabase. Las correcciones siguen en una rama y el PR está en borrador.
