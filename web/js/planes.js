@@ -170,6 +170,6 @@ Planes.iniciar = async function () {
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)Planes.refrescar();});
 };
 // Los precios son visibles aunque los datos o la cuenta sigan cargando.
-pintarPlanes();
+if(typeof document!=='undefined') pintarPlanes();
 window.Planes=Planes;
 })();
