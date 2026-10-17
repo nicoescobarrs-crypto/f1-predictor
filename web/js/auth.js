@@ -18,6 +18,7 @@ const Cuenta = {
   sesion: null,      // sesion de auth, o null
   perfil: null,      // fila de public.perfiles del usuario
   listeners: [],     // a quien avisar cuando cambia la sesion
+  versionSesion: 0, // evita publicar un perfil de una sesion anterior
 };
 
 /** Se suscribe a los cambios de sesion. Se llama al entrar y al salir. */
@@ -56,14 +57,28 @@ Cuenta.iniciar = async function () {
 
   const { data } = await Cuenta.sb.auth.getSession();
   Cuenta.sesion = data.session ?? null;
-  if (Cuenta.sesion) await Cuenta._cargarPerfil();
+  if (Cuenta.sesion) Cuenta.perfil = await Cuenta._cargarPerfil(Cuenta.sesion);
 
-  Cuenta.sb.auth.onAuthStateChange(async (_evento, sesion) => {
+  Cuenta.sb.auth.onAuthStateChange((_evento, sesion) => {
+    const version = ++Cuenta.versionSesion;
     Cuenta.sesion = sesion ?? null;
     Cuenta.perfil = null;
-    if (sesion) await Cuenta._cargarPerfil();
-    Cuenta._pintarCabecera();
-    Cuenta._avisar();
+
+    // El callback se ejecuta con el bloqueo interno de Auth. Consultar el
+    // perfil o avisar a listeners que consultan Supabase debe esperar a salir.
+    setTimeout(async () => {
+      if (version !== Cuenta.versionSesion) return;
+      let perfil = null;
+      try {
+        if (sesion) perfil = await Cuenta._cargarPerfil(sesion);
+      } catch (error) {
+        console.warn("No se pudo cargar el perfil:", error);
+      }
+      if (version !== Cuenta.versionSesion) return;
+      Cuenta.perfil = perfil;
+      Cuenta._pintarCabecera();
+      Cuenta._avisar();
+    }, 0);
   });
 
   Cuenta._montarUI();
@@ -71,24 +86,24 @@ Cuenta.iniciar = async function () {
   return true;
 };
 
-Cuenta._cargarPerfil = async function () {
+Cuenta._cargarPerfil = async function (sesion) {
   const { data, error } = await Cuenta.sb
     .from("perfiles")
     .select("id, usuario, nombre, avatar, equipo_fav, rol")
-    .eq("id", Cuenta.sesion.user.id)
+    .eq("id", sesion.user.id)
     .maybeSingle();
 
-  if (error) { console.warn("No se pudo leer el perfil:", error.message); return; }
+  if (error) { console.warn("No se pudo leer el perfil:", error.message); return null; }
 
   // El perfil lo crea un trigger en la misma transaccion que el alta, pero
   // si alguien creo el usuario antes de instalar el trigger, no existe.
   if (!data) {
-    const nick = "piloto" + Cuenta.sesion.user.id.slice(0, 6);
-    await Cuenta.sb.from("perfiles").insert({ id: Cuenta.sesion.user.id, usuario: nick });
-    Cuenta.perfil = { id: Cuenta.sesion.user.id, usuario: nick, avatar: "🏎️", rol: "usuario" };
-    return;
+    // No fabricar un perfil local: RLS no permite insertar perfiles desde
+    // el cliente. Un perfil antiguo ausente debe repararse en el servidor.
+    console.warn("La cuenta no tiene perfil en la base de datos.");
+    return null;
   }
-  Cuenta.perfil = data;
+  return data;
 };
 
 Cuenta.esAdmin = () => Cuenta.perfil?.rol === "admin";
