@@ -1,0 +1,21 @@
+name: Pruebas de quiniela
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix tests --ignore-scripts --no-audit --no-fund
+      - name: Comprobar sintaxis de JavaScript
+        run: for file in web/js/*.js; do node --check "$file"; done
+      - run: npm test --prefix tests

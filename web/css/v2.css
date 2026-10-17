@@ -937,6 +937,10 @@ header {
 .cabecera-inner { flex: 1; width: 100%; }
 .cinta { margin-top: auto; }
 
+/* Cuando no se dibuja el circuito, la cabecera se adapta al contenido. */
+.sin-3d header { min-height: 0; }
+.sin-3d .cabecera-inner { padding-bottom: 1.5rem; }
+
 /* El circuito vive a la derecha: el degradado solo oscurece la zona del
    texto y deja ver la pista entera. */
 header::after {

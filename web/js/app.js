@@ -174,8 +174,8 @@ function renderParrilla() {
         <span class="puesto">${i + 1}</span>
         <span class="equipo-chip" style="background:${colorEquipo(p.equipo)}"></span>
         <span class="nombre"><b>${p.abrev}</b> ${p.nombre}<small>${p.equipo}</small></span>
-        <button class="mover" data-dir="-1" title="Subir">▲</button>
-        <button class="mover" data-dir="1" title="Bajar">▼</button>
+        <button class="mover" data-dir="-1" title="Subir" aria-label="Subir a ${escapar(p.nombre)}" ${i === 0 ? "disabled" : ""}>▲</button>
+        <button class="mover" data-dir="1" title="Bajar" aria-label="Bajar a ${escapar(p.nombre)}" ${i === estado.parrilla.length - 1 ? "disabled" : ""}>▼</button>
       </li>`;
     })
     .join("");

@@ -23,3 +23,6 @@ venv/
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Dependencias de pruebas, fuera de la web publicada
+tests/node_modules/
