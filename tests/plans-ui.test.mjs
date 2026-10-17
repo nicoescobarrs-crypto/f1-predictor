@@ -5,6 +5,25 @@ import {JSDOM} from 'jsdom';
 const html=await readFile(new URL('../web/index.html',import.meta.url),'utf8');
 const source=await readFile(new URL('../web/js/planes.js',import.meta.url),'utf8');
 const tick=()=>new Promise(resolve=>setTimeout(resolve,10));
+test('Mejorar plan abre precios mientras los datos y la cuenta siguen pendientes',async()=>{
+  const dom=new JSDOM(html,{url:'https://example.test',runScripts:'outside-only'}),w=dom.window;
+  try {
+    const app=await readFile(new URL('../web/js/app.js',import.meta.url),'utf8');
+    const navigation=app.slice(app.indexOf('function activarTabs()'),app.indexOf('async function init()'));
+    w.estado={charts:{}};
+    w.Cuenta={sesion:null};
+    w.escapar=s=>String(s);
+    w.eval(navigation+'\nactivarTabs();');
+    w.eval(source);
+    w.document.querySelector('#btn-planes').click();
+    assert.equal(w.document.querySelector('#panel-planes').classList.contains('activo'),true);
+    assert.equal(w.document.querySelector('#tabs [data-panel="planes"]').classList.contains('activa'),true);
+    assert.equal(w.document.querySelector('section.panel.activo').id,'panel-planes');
+    assert.match(w.document.querySelector('#planes-tarjetas').textContent,/9\.900/);
+    assert.match(w.document.querySelector('#planes-tarjetas').textContent,/24\.900/);
+    assert.match(w.document.querySelector('#plan-actual').textContent,/Inicia sesión/);
+  } finally {dom.window.close();}
+});
 async function page(admin=false) {
   const dom=new JSDOM(html,{url:'https://example.test',runScripts:'outside-only'}),w=dom.window;
   const calls=[];

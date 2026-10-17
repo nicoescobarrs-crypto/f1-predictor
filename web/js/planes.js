@@ -119,7 +119,6 @@ function ejecutar(id,accion) {
   };
 }
 Planes.iniciar = async function () {
-  el('btn-planes').onclick=Planes.abrir;
   el('planes-actualizar').onclick=()=>Planes.refrescar();
   el('planes-tarjetas').onclick=async e=>{
     const b=e.target.closest('[data-solicitar]'); if(!b||b.disabled||!requiereSesion())return;
@@ -170,5 +169,7 @@ Planes.iniciar = async function () {
   await Planes.lista;
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)Planes.refrescar();});
 };
+// Los precios son visibles aunque los datos o la cuenta sigan cargando.
+if(typeof document!=='undefined') pintarPlanes();
 window.Planes=Planes;
 })();
