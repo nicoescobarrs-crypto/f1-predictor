@@ -22,6 +22,7 @@ const Quiniela = {
   mia: null,           // la quiniela guardada del usuario para ese GP
   modeloTop10: null,   // lo que predice el modelo para ese GP
   calendarioBD: false, // true si el calendario sale de Supabase
+  estadoCalendario: "cargando", // listo, vacio, error o sin-configuracion
   _reloj: null,
   _canal: null,
   _refrescoPendiente: null,
@@ -100,14 +101,22 @@ async function calendarioPublico(temporada) {
 
 async function cargarCalendario() {
   const temporada = estado.indice?.temporadas?.at(-1) ?? new Date().getFullYear();
-
+  Quiniela.calendarioBD = false;
+  Quiniela.estadoCalendario = CONFIG.hayCuenta() ? "error" : "sin-configuracion";
   if (Cuenta.sb) {
-    const { data, error } = await Cuenta.sb
-      .from("grandes_premios").select("*").eq("temporada", temporada).order("ronda");
-    if (!error && data?.length) {
-      Quiniela.gps = data;
-      Quiniela.calendarioBD = true;
-      return;
+    try {
+      const { data, error } = await Cuenta.sb
+        .from("grandes_premios").select("*").eq("temporada", temporada).order("ronda");
+      if (!error && Array.isArray(data)) {
+        Quiniela.estadoCalendario = data.length ? "listo" : "vacio";
+        if (data.length) {
+          Quiniela.gps = data;
+          Quiniela.calendarioBD = true;
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn("No se pudo conectar con el calendario:", error);
     }
   }
   // Sin calendario en la BD (o sin BD): se juega en modo vista previa con el
@@ -314,9 +323,9 @@ function pintarJuego() {
       <span class="q-num">P${i + 1}</span>
       ${p ? `<span class="q-nombre"><b>${esc(p.abrev)}</b> ${esc(p.nombre)}<small>${esc(p.equipo)}</small></span>
              ${cerrada ? "" : `<span class="q-flechas">
-               <button data-mover="-1" data-i="${i}" aria-label="Subir">▲</button>
-               <button data-mover="1" data-i="${i}" aria-label="Bajar">▼</button>
-               <button data-quitar="${i}" aria-label="Quitar">✕</button></span>`}`
+               <button data-mover="-1" data-i="${i}" aria-label="Subir a ${esc(p.nombre)}" ${i === 0 ? "disabled" : ""}>▲</button>
+               <button data-mover="1" data-i="${i}" aria-label="Bajar a ${esc(p.nombre)}" ${i === 9 ? "disabled" : ""}>▼</button>
+               <button data-quitar="${i}" aria-label="Quitar a ${esc(p.nombre)}">✕</button></span>`}`
           : `<span class="q-vacio">${cerrada ? "—" : "elige un piloto"}</span>`}
     </li>`;
   }).join("");
@@ -375,7 +384,9 @@ function pintarBotonGuardar() {
   }
   if (!Quiniela.calendarioBD) {
     btn.disabled = true;
-    estadoTxt.textContent = "El calendario aún no está en la base de datos. Un admin debe sincronizarlo (abajo).";
+    estadoTxt.textContent = Quiniela.estadoCalendario === "error"
+      ? "No se pudo conectar para guardar. Reintenta la conexión desde el aviso de arriba."
+      : "Las quinielas estarán disponibles cuando se publique el calendario.";
     return;
   }
   btn.textContent = Quiniela.mia ? "Actualizar quiniela" : "Guardar quiniela";
@@ -467,7 +478,6 @@ async function guardar() {
       evento_slug: Quiniela.slug,
       top10: Quiniela.top10,
       abandonos: Quiniela.abandonos,
-      enviada_en: new Date().toISOString(),
     }, { onConflict: "usuario_id,evento_slug" })
     .select()
     .single();
@@ -506,11 +516,21 @@ async function pintarRanking() {
     return;
   }
 
-  const [{ data, error }, modelo] = await Promise.all([
-    Cuenta.sb.from("tabla_general").select("*").order("puntos", { ascending: false }).limit(100),
-    puntosDelModelo().catch(() => null),
-  ]);
-  if (error) { el.innerHTML = `<p class="texto-tenue">${esc(error.message)}</p>`; return; }
+  let ranking, modelo;
+  try {
+    [ranking, modelo] = await Promise.all([
+      Cuenta.sb.from("tabla_general").select("*").order("puntos", { ascending: false }).limit(100),
+      puntosDelModelo().catch(() => null),
+    ]);
+    if (ranking.error) throw ranking.error;
+  } catch (error) {
+    console.warn("No se pudo cargar el ranking:", error);
+    el.innerHTML = `<p class="texto-tenue" role="status">No se pudo cargar la clasificación.
+      Tu selección sigue aquí.</p><button class="accion secundaria" id="q-reintentar-ranking">Reintentar</button>`;
+    document.getElementById("q-reintentar-ranking").onclick = pintarRanking;
+    return;
+  }
+  const { data } = ranking;
 
   const filas = (data ?? []).filter((f) => f.jugadas > 0);
   if (modelo) filas.push(modelo);
@@ -723,7 +743,14 @@ async function seleccionarGP(slug) {
 }
 
 function leerBorrador(slug) {
-  try { return JSON.parse(localStorage.getItem(`quiniela:${slug}`)); } catch { return null; }
+  try {
+    const borrador = JSON.parse(localStorage.getItem(`quiniela:${slug}`));
+    if (!Array.isArray(borrador) || borrador.length !== 10) return null;
+    const ids = new Set(Quiniela.pilotos.map((p) => p.driver_id));
+    const elegidos = borrador.filter((id) => id != null);
+    if (!elegidos.every((id) => ids.has(id)) || new Set(elegidos).size !== elegidos.length) return null;
+    return borrador;
+  } catch { return null; }
 }
 function guardarBorrador() {
   try { localStorage.setItem(`quiniela:${Quiniela.slug}`, JSON.stringify(Quiniela.top10)); } catch { /* sin almacenamiento */ }
@@ -735,6 +762,15 @@ function pintarAvisoGeneral() {
     el.innerHTML = `<div class="aviso">Estás en <b>modo vista previa</b>: puedes montar tu top 10 y
       compararlo con el modelo, pero guardar y el ranking necesitan la base de datos. Se activa
       rellenando <code>web/js/config.js</code> (paso a paso en DEPLOY.md).</div>`;
+  } else if (Quiniela.estadoCalendario === "error") {
+    el.innerHTML = `<div class="aviso" role="status">No se pudo conectar con el servicio de quinielas.
+      Puedes preparar tu top 10; guardar y el ranking estarán disponibles al recuperar la conexión.
+      <button class="accion secundaria" id="q-reintentar">Reintentar conexión</button></div>`;
+    document.getElementById("q-reintentar").onclick = async (e) => {
+      e.target.disabled = true;
+      await cargarCalendario();
+      await refrescarTodo();
+    };
   } else if (!Quiniela.calendarioBD) {
     el.innerHTML = `<div class="aviso">El calendario de la temporada aún no está en la base de datos.
       ${Cuenta.esAdmin() ? "Pulsa <b>Sincronizar calendario</b> en el panel de admin, abajo."
